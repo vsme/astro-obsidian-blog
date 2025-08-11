@@ -1,4 +1,5 @@
 import { optimizeImage } from "@/utils/optimizeImages";
+import { getVideoPath } from "@/utils/videoUtils";
 import type { CollectionEntry } from "astro:content";
 
 // 通用的poster路径优化函数
@@ -122,9 +123,23 @@ export async function parseEntry(entry: CollectionEntry<"diary">) {
       }
     }
 
-    // 提取HTML内容
+    // 提取HTML内容并处理其中的attachment路径
     const htmlMatches = blockContent.match(/```html([\s\S]*?)```/);
-    const htmlContent = htmlMatches ? htmlMatches[1].trim() : "";
+    let htmlContent = htmlMatches ? htmlMatches[1].trim() : "";
+    
+    // 处理HTML中的video标签src属性包含attachment的情况
+    if (htmlContent) {
+      const videoRegex = /<video([^>]*?)src="([^"]*attachment[^"]*?)"([^>]*?)>/g;
+      const videoMatches = [...htmlContent.matchAll(videoRegex)];
+      
+      for (const match of videoMatches) {
+        const [fullMatch, beforeSrc, src, afterSrc] = match;
+        // 使用动态路径匹配获取正确的视频路径
+        const optimizedSrc = getVideoPath(src);
+        const newVideoTag = `<video${beforeSrc}src="${optimizedSrc}"${afterSrc}>`;
+        htmlContent = htmlContent.replace(fullMatch, newVideoTag);
+      }
+    }
 
     // 提取电影卡片数据
     let movieData: LocalMovieData | undefined = undefined;

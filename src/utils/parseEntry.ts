@@ -85,6 +85,9 @@ export async function parseEntry(entry: CollectionEntry<"diary">) {
     
     // 移除代码块标识
     text = text.replace(/```(imgs|html|card-[\s\S]*?)[\s\S]*?```/g, '').trim();
+    
+    // 解析 Markdown 链接为 HTML 链接
+    text = text.replace(/\[([^\]]+)\]\(([^\)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer" class="text-skin-accent font-semibold underline decoration-2 underline-offset-2 hover:decoration-4 hover:text-skin-accent-2 transition-all duration-200">$1</a>');
 
     // 提取图片并优化
     const images = [];

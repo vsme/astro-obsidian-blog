@@ -86,7 +86,7 @@ const TimelineItemReact: React.FC<TimelineItemProps> = ({
   musicData,
 }) => {
   const galleryRef = useRef<HTMLDivElement>(null);
-  const lightGalleryRef = useRef<any>(null);
+  const lightGalleryRef = useRef<{ destroy: () => void } | null>(null);
   const [optimizedImages, setOptimizedImages] = useState<
     {
       thumbnail: string;
@@ -152,8 +152,8 @@ const TimelineItemReact: React.FC<TimelineItemProps> = ({
             zoomFromOrigin: true,
             allowMediaOverlap: false,
           });
-        } catch (error) {
-          console.error("Failed to load lightGallery:", error);
+        } catch {
+          // Failed to load lightGallery - silently handle the error
         }
       };
 
@@ -181,9 +181,10 @@ const TimelineItemReact: React.FC<TimelineItemProps> = ({
             {/* 帖子内容 */}
             <div className="text-skin-base">
               {text && (
-                <p className="mb-4 text-base leading-relaxed whitespace-pre-wrap">
-                  {text}
-                </p>
+                <div 
+                  className="mb-4 text-base leading-relaxed whitespace-pre-wrap"
+                  dangerouslySetInnerHTML={{ __html: text }}
+                />
               )}
 
               {isImagesLoaded && optimizedImages.length > 0 && (

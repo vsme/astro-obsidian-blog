@@ -1,0 +1,175 @@
+@plugin '@tailwindcss/typography';
+
+@layer base {
+  /* ===== Override default Tailwind Typography styles ===== */
+  .app-prose {
+    @apply prose;
+
+    h1,
+    h2,
+    h3,
+    h4,
+    th {
+      @apply mb-3 text-foreground;
+    }
+
+    h3 {
+      @apply italic;
+    }
+
+    p,
+    strong,
+    ol,
+    ul,
+    figcaption,
+    table,
+    code {
+      @apply text-foreground;
+    }
+
+    .rehype-figure-container {
+      @apply sm:my-8 sm:flex sm:gap-4;
+    }
+
+    .rehype-figure-container .rehype-figure {
+      @apply sm:my-0 sm:flex-1;
+    }
+
+    .rehype-figure figcaption {
+      @apply text-center;
+    }
+
+    .rehype-figure img {
+      @apply max-h-[60vh] object-cover!;
+    }
+
+    a {
+      @apply break-words text-foreground decoration-dashed underline-offset-4 hover:text-accent focus-visible:no-underline;
+    }
+
+    ul {
+      @apply overflow-x-clip;
+
+      &.contains-task-list {
+        @apply pl-0;
+
+        li {
+          @apply list-none text-foreground;
+
+          /* 美化 input type="checkbox" */
+          input[type="checkbox"][disabled] {
+            @apply relative top-1 mr-2 h-5 w-5 cursor-not-allowed appearance-none rounded border-2 border-accent/70 bg-accent/10 transition-colors duration-200;
+
+            /* 伪元素绘制“勾” */
+            &::after {
+              content: "";
+              position: absolute;
+              top: 50%;
+              left: 50%;
+              width: 4px; /* 勾的短边 */
+              height: 8px; /* 勾的长边 */
+              border: 2px solid var(--accent);
+              border-width: 0 2px 2px 0; /* 仅绘制“\\”这两条边 */
+              transform: translate(-50%, -60%) rotate(45deg);
+              opacity: 0; /* 默认隐藏 */
+              transition: opacity 0.2s;
+            }
+
+            /* 选中时：填充纯色、显示勾 */
+            &:checked {
+              @apply border-accent/70 bg-accent/10;
+            }
+            &:checked::after {
+              @apply opacity-100;
+            }
+          }
+        }
+      }
+    }
+
+    li {
+      @apply marker:text-accent;
+    }
+
+    hr {
+      @apply border-border;
+    }
+
+    img {
+      @apply mx-auto rounded-md;
+    }
+
+    figcaption {
+      @apply opacity-75;
+    }
+
+    table {
+      th,
+      td {
+        @apply border border-border p-2;
+      }
+
+      th {
+        @apply py-1.5;
+      }
+
+      code {
+        @apply break-all sm:break-normal;
+      }
+    }
+
+    code {
+      @apply rounded bg-muted/50 p-1 break-words text-foreground before:content-none after:content-none;
+    }
+
+    mark {
+      @apply rounded bg-accent/35 p-1 break-words text-foreground;
+    }
+
+    .astro-code code {
+      @apply flex-[1_0_100%] bg-inherit p-0;
+    }
+
+    blockquote {
+      @apply border-s-accent/80 break-words opacity-80;
+    }
+
+    details {
+      @apply inline-block cursor-pointer text-foreground select-none [&_p]:hidden [&_ul]:!my-0;
+    }
+
+    summary {
+      @apply focus-visible:no-underline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent focus-visible:outline-dashed;
+    }
+
+    pre {
+      @apply focus-visible:border-transparent focus-visible:outline-2 focus-visible:outline-accent focus-visible:outline-dashed;
+    }
+  }
+
+  /* ===== Code Blocks & Syntax Highlighting ===== */
+  .astro-code {
+    @apply flex border bg-(--shiki-light-bg) text-(--shiki-light) outline-border [&_span]:text-(--shiki-light);
+  }
+
+  html[data-theme="dark"] .astro-code {
+    @apply bg-(--shiki-dark-bg) text-(--shiki-dark) [&_span]:text-(--shiki-dark);
+  }
+
+  /* Styles for Shiki transformers */
+  /* https://shiki.style/packages/transformers */
+  .astro-code {
+    .line.diff.add {
+      @apply relative inline-block w-full bg-green-400/20 before:absolute before:-left-3 before:text-green-500 before:content-['+'];
+    }
+    .line.diff.remove {
+      @apply relative inline-block w-full bg-red-500/20 before:absolute before:-left-3 before:text-red-500 before:content-['-'];
+    }
+    .line.highlighted {
+      @apply inline-block w-full bg-slate-400/20;
+    }
+    .highlighted-word {
+      @apply rounded-sm border border-border px-0.5 py-px;
+    }
+  }
+}

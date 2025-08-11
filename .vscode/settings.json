@@ -1,0 +1,6 @@
+{
+  "editor.snippetSuggestions": "top",
+  "editor.tabSize": 2,
+  "editor.formatOnSave": true,
+  "editor.defaultFormatter": "esbenp.prettier-vscode",
+}

@@ -1,0 +1,46 @@
+---
+layout: ../layouts/AboutLayout.astro
+title: "关于"
+---
+
+import DisintegrationImg from "../components/DisintegrationImg.tsx";
+import { Image, getImage } from "astro:assets";
+import aboutWebp from "../data/attachment/blog/about.png";
+
+export const optimizedAbout = await getImage({
+  src: aboutWebp,
+  width: 800,
+  format: "webp",
+  quality: 80,
+});
+
+<figure class="rehype-figure mt-12 mb-16">
+  <DisintegrationImg
+    client:idle
+    image={{
+      src: optimizedAbout.src,
+      width: optimizedAbout.attributes.width,
+      height: optimizedAbout.attributes.height,
+      format: "webp",
+    }}
+  />
+  {/* <figcaption>🌞🌳🌹🦁🍽️🩸🐆</figcaption> */}
+</figure>
+
+## 👋 你好呀 ~
+
+也许你在这里见不到太多硬核技术教程，我更想用图片和文字留住生活里的那些温柔瞬间。
+
+## 🔖 关于网站
+
+一开始只想简单做个小站，因为各种原因迭代了好多版本，比如最初时候网站是用 `Hexo` 搭建的，后转至 `iles`，又用了一段时间的 `Notion` + `Nuxt.js`，本说着不再折腾...
+
+现在又用 `Astro` 重新写了一遍，不过根据目前网站的情况，`Astro` 已经能够满足我的需求。
+
+我将会继续完善这个简单的小站。
+
+<p class="mt-12">Yawei Sun</p>
+
+<p class="text-sm">Suzhou, China</p>
+
+{/* 其他平台：[Bilibili](https://space.bilibili.com/164997305) _/_ [GitHub](https://github.com/vsme) */}

@@ -1,0 +1,173 @@
+@import "tailwindcss";
+@import "./typography.css";
+@import "tw-animate-css";
+
+/* 加载字体
+@import "@fontsource-variable/noto-sans-sc/index.css";
+@import "@fontsource-variable/noto-serif-sc/index.css";
+@import "@fontsource/ma-shan-zheng/400.css";
+
+@theme {
+  --font-family-sans: 'Noto Sans SC Variable', sans-serif;
+  --font-family-serif: 'Noto Serif SC Variable', serif;
+  --font-family-hand: 'Ma Shan Zheng', cursive;
+}
+*/
+
+@custom-variant dark (&:where([data-theme=dark], [data-theme=dark] *));
+
+:root,
+html[data-theme="light"] {
+  --background: #fdfdfd;
+  --foreground: #282728;
+  --accent: #006658;
+  --muted: #e6e6e6;
+  --border: #c6d7d8;
+}
+
+html[data-theme="dark"] {
+  --background: oklch(24.521% 0.00755 285.784);
+  --foreground: #e9edf1;
+  --accent: #78fff6;
+  --muted: #55716a;
+  --border: #43868663;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-accent: var(--accent);
+  --color-muted: var(--muted);
+  --color-border: var(--border);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-accent/75;
+    scrollbar-width: auto;
+    scrollbar-color: var(--color-muted) transparent;
+  }
+  html {
+    @apply overflow-y-scroll scroll-smooth leading-7;
+  }
+  body {
+    @apply flex min-h-svh flex-col bg-background font-serif text-foreground selection:bg-accent/75 selection:text-background;
+  }
+  a,
+  button {
+    @apply outline-offset-1 outline-accent focus-visible:no-underline focus-visible:outline-2 focus-visible:outline-dashed;
+  }
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+  section,
+  footer {
+    @apply mx-auto max-w-app px-4;
+  }
+}
+
+@utility max-w-app {
+  @apply max-w-3xl;
+}
+
+.active-nav {
+  @apply relative;
+
+  &:after {
+    view-transition-name: nav-slider;
+    content: "";
+    @apply absolute top-0 left-0 h-full w-full rounded-md bg-accent/5;
+  }
+}
+
+/* Source: https://piccalil.li/blog/a-more-modern-css-reset/ */
+/* Anything that has been anchored to should have extra scroll margin */
+:target {
+  scroll-margin-block: 1rem;
+}
+
+::-webkit-scrollbar {
+  @apply w-1;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply rounded-full bg-accent;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-background;
+}
+
+/* DisintegrationImg component styles */
+.disintegration-img {
+  opacity: 0;
+}
+
+.disintegration-img.loaded {
+  opacity: 1;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  &[id] {
+    scroll-margin-top: calc(var(--spacing) * 14 + 15px);
+  }
+}
+
+#目录 {
+  @apply hidden;
+
+  & + .article-toc-nav {
+    @apply absolute left-full hidden h-[calc(100%-var(--spacing)*14*3)] w-[calc((100vw-var(--container-3xl))/2)] xl:block;
+
+    & > ul {
+      @apply sticky top-[calc(var(--spacing)*14*2)] my-0 h-[calc(100vh-var(--spacing)*14*3)] overflow-y-auto;
+
+      &:before {
+        content: "目录";
+        @apply top-0 left-0 w-full bg-background text-foreground;
+      }
+    }
+
+    li {
+      @apply list-none pl-0 text-sm;
+      a {
+        @apply no-underline;
+        &.active {
+          @apply text-accent;
+        }
+      }
+    }
+  }
+}
+
+/* iOS Safari 兼容性修复 - 确保图片正方形显示 */
+.image-item {
+  /* 为不支持 aspect-ratio 的浏览器提供 fallback */
+  &::before {
+    content: '';
+    display: block;
+    padding-top: 100%; /* 1:1 aspect ratio */
+  }
+  
+  /* 当支持 aspect-ratio 时，移除 padding-top */
+  @supports (aspect-ratio: 1 / 1) {
+    &::before {
+      display: none;
+    }
+  }
+  
+  img {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+}

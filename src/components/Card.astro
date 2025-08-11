@@ -1,0 +1,67 @@
+---
+import { slugifyStr } from "@/utils/slugify";
+import type { CollectionEntry } from "astro:content";
+import { getPath } from "@/utils/getPath";
+import Datetime from "./Datetime.astro";
+import { Image } from "astro:assets";
+
+export interface Props extends CollectionEntry<"blog"> {
+  variant?: "h2" | "h3";
+}
+
+const { variant = "h2", data, id, filePath } = Astro.props;
+
+const { title, description, pubDatetime, modDatetime, timezone } = data;
+
+const headerProps = {
+  style: { viewTransitionName: slugifyStr(title) },
+  class: "text-lg font-medium decoration-dashed hover:underline",
+};
+---
+
+<li class="my-6">
+  <div class="flex flex-col md:flex-row md:gap-4">
+    <div
+      class="hidden md:mb-0 md:block md:h-[100px] md:w-[100px] md:flex-shrink-0"
+    >
+      {
+        data.ogImage &&
+          (typeof data.ogImage === "string" ? (
+            <Image
+              src={data.ogImage}
+              alt={title}
+              width={100}
+              height={100}
+              class="aspect-auto h-full w-full rounded-lg object-cover"
+            />
+          ) : (
+            <Image
+              src={data.ogImage}
+              alt={title}
+              width={100}
+              height={100}
+              format="webp"
+              quality={80}
+              class="aspect-auto h-full w-full rounded-lg object-cover"
+            />
+          ))
+      }
+    </div>
+    <div class="md:w-[calc(100% - 100px)] w-full">
+      <a
+        href={getPath(id, filePath)}
+        class="inline-block text-lg font-medium text-accent decoration-dashed underline-offset-4 focus-visible:no-underline focus-visible:underline-offset-0"
+      >
+        {
+          variant === "h2" ? (
+            <h2 {...headerProps}>{title}</h2>
+          ) : (
+            <h3 {...headerProps}>{title}</h3>
+          )
+        }
+      </a>
+      <Datetime {pubDatetime} {modDatetime} {timezone} />
+      <p>{description}</p>
+    </div>
+  </div>
+</li>

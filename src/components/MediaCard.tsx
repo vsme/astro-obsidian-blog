@@ -14,6 +14,8 @@ export interface MediaData {
   album?: string;
   duration?: number;
   url?: string;
+  source?: string;
+  external_url?: string;
 }
 
 export interface MediaCardProps {
@@ -41,6 +43,8 @@ const MediaCard: React.FC<MediaCardProps> = ({
     album,
     duration,
     url,
+    source,
+    external_url,
   } = mediaData;
 
   const posterUrl = poster_path || "";
@@ -75,14 +79,27 @@ const MediaCard: React.FC<MediaCardProps> = ({
   const handleCardClick = () => {
     if (cardType === "music" && url) {
       window.open(url, "_blank");
+    } else if (external_url) {
+      // 如果有external_url，优先使用
+      window.open(external_url, "_blank");
     } else if (id) {
       let baseUrl;
       if (cardType === "tv") {
-        baseUrl = "https://www.themoviedb.org/tv/";
+        // 根据source决定TV剧集的链接
+        if (source === "douban") {
+          baseUrl = "https://movie.douban.com/subject/";
+        } else {
+          baseUrl = "https://www.themoviedb.org/tv/";
+        }
       } else if (cardType === "book") {
         baseUrl = "https://book.douban.com/subject/";
       } else {
-        baseUrl = "https://www.themoviedb.org/movie/";
+        // 电影类型，根据source决定链接
+        if (source === "douban") {
+          baseUrl = "https://movie.douban.com/subject/";
+        } else {
+          baseUrl = "https://www.themoviedb.org/movie/";
+        }
       }
       window.open(`${baseUrl}${id}`, "_blank");
     }

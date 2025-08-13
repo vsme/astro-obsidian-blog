@@ -26,6 +26,8 @@ interface LocalMovieData {
   genres?: string;
   overview?: string;
   poster?: string;
+  source?: string;
+  external_url?: string;
 }
 
 // 本地TV数据接口
@@ -38,6 +40,8 @@ interface LocalTVData {
   genres?: string;
   overview?: string;
   poster?: string;
+  source?: string;
+  external_url?: string;
 }
 
 // 本地书籍数据接口
@@ -50,6 +54,7 @@ interface LocalBookData {
   genres?: string;
   overview?: string;
   poster?: string;
+  external_url?: string;
 }
 
 // 本地音乐数据接口
@@ -174,7 +179,9 @@ export async function parseEntry(entry: CollectionEntry<"diary">) {
           runtime: parseNumber('runtime'),
           genres: parseField('genres'),
           overview: parseField('overview'),
-          poster: optimizedPoster
+          poster: optimizedPoster,
+          source: parseField('source'),
+          external_url: parseField('external_url')
         };
       }
     }
@@ -208,7 +215,9 @@ export async function parseEntry(entry: CollectionEntry<"diary">) {
           rating: parseNumber('rating'),
           genres: parseField('genres'),
           overview: parseField('overview'),
-          poster: optimizedPoster
+          poster: optimizedPoster,
+          source: parseField('source'),
+          external_url: parseField('external_url')
         };
       }
     }
@@ -242,7 +251,8 @@ export async function parseEntry(entry: CollectionEntry<"diary">) {
           rating: parseNumber('rating'),
           genres: parseField('genres'),
           overview: parseField('overview'),
-          poster: optimizedPoster
+          poster: optimizedPoster,
+          external_url: parseField('external_url')
         };
 
       }

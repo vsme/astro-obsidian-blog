@@ -1,13 +1,16 @@
-import { optimizeImage } from "@/utils/optimizeImages";
+import { optimizeImage, type ImageOptimizeOptions } from "@/utils/optimizeImages";
 import { getVideoPath } from "@/utils/videoUtils";
 import type { CollectionEntry } from "astro:content";
 
 // 通用的poster路径优化函数
-async function optimizePosterPath(posterPath: string | undefined): Promise<string | undefined> {
+async function optimizePosterPath (
+  posterPath: string | undefined,
+  options?: ImageOptimizeOptions
+): Promise<string | undefined> {
   if (!posterPath) return posterPath;
-  
+
   try {
-    const optimizedInfo = await optimizeImage(posterPath);
+    const optimizedInfo = await optimizeImage(posterPath, options);
     return optimizedInfo.thumbnail;
   } catch {
     // 失败时使用原始路径
@@ -69,7 +72,7 @@ interface LocalMusicData {
 }
 
 // 解析日记条目的函数
-export async function parseEntry(entry: CollectionEntry<"diary">) {
+export async function parseEntry (entry: CollectionEntry<"diary">) {
   const date = entry.id.replace(".md", "");
 
   // 解析markdown内容，提取时间段和内容
@@ -85,12 +88,12 @@ export async function parseEntry(entry: CollectionEntry<"diary">) {
     const blockContent = match[2];
 
     // 提取文本内容（在```imgs、```html、```card-之前的部分）
-  const textMatch = blockContent.match(/^([\s\S]*?)(?=```imgs|```html|```card-|$)/);
+    const textMatch = blockContent.match(/^([\s\S]*?)(?=```imgs|```html|```card-|$)/);
     let text = textMatch ? textMatch[1].trim() : blockContent.trim();
-    
+
     // 移除代码块标识
     text = text.replace(/```(imgs|html|card-[\s\S]*?)[\s\S]*?```/g, '').trim();
-    
+
     // 解析 Markdown 链接为 HTML 链接
     text = text.replace(/\[([^\]]+)\]\(([^\)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer" class="text-skin-accent font-semibold underline decoration-2 underline-offset-2 hover:decoration-4 hover:text-skin-accent-2 transition-all duration-200">$1</a>');
 
@@ -134,18 +137,40 @@ export async function parseEntry(entry: CollectionEntry<"diary">) {
     // 提取HTML内容并处理其中的attachment路径
     const htmlMatches = blockContent.match(/```html([\s\S]*?)```/);
     let htmlContent = htmlMatches ? htmlMatches[1].trim() : "";
-    
-    // 处理HTML中的video标签src属性包含attachment的情况
+
+    // 处理HTML中的video标签包含attachment的src和poster属性
     if (htmlContent) {
-      const videoRegex = /<video([^>]*?)src="([^"]*attachment[^"]*?)"([^>]*?)>/g;
+      const videoRegex = /<video([^>]*)>/g;
       const videoMatches = [...htmlContent.matchAll(videoRegex)];
-      
+
       for (const match of videoMatches) {
-        const [fullMatch, beforeSrc, src, afterSrc] = match;
-        // 使用动态路径匹配获取正确的视频路径
-        const optimizedSrc = getVideoPath(src);
-        const newVideoTag = `<video${beforeSrc}src="${optimizedSrc}"${afterSrc}>`;
-        htmlContent = htmlContent.replace(fullMatch, newVideoTag);
+        const [fullMatch, attributes] = match;
+        let newAttributes = attributes;
+
+        // 处理src属性
+        const srcMatch = attributes.match(/src="([^"]*attachment[^"]*?)"/);
+        if (srcMatch) {
+          const [srcAttr, src] = srcMatch;
+          const optimizedSrc = getVideoPath(src);
+          newAttributes = newAttributes.replace(srcAttr, `src="${optimizedSrc}"`);
+        }
+
+        // 处理poster属性
+        const posterMatch = attributes.match(/poster="([^"]*attachment[^"]*?)"/);
+        if (posterMatch) {
+          const [posterAttr, posterSrc] = posterMatch;
+          try {
+            const optimizedInfo = await optimizeImage(posterSrc, { keepOriginalSize: true, quality: 50 });
+            newAttributes = newAttributes.replace(posterAttr, `poster="${optimizedInfo.thumbnail}"`);
+          } catch {
+            // 失败时保持原始路径
+          }
+        }
+
+        if (newAttributes !== attributes) {
+          const newVideoTag = `<video${newAttributes}>`;
+          htmlContent = htmlContent.replace(fullMatch, newVideoTag);
+        }
       }
     }
 
@@ -160,7 +185,7 @@ export async function parseEntry(entry: CollectionEntry<"diary">) {
         const match = cardContent.match(new RegExp(`${field}:\s*(.+)`, 'm'));
         return match ? match[1].trim() : undefined;
       };
-      
+
       const parseNumber = (field: string): number | undefined => {
         const value = parseField(field);
         return value ? parseFloat(value) : undefined;
@@ -169,7 +194,7 @@ export async function parseEntry(entry: CollectionEntry<"diary">) {
       const title = parseField('title');
       if (title) {
         const optimizedPoster = await optimizePosterPath(parseField('poster'));
-        
+
         movieData = {
           id: parseNumber('id'),
           title,
@@ -197,7 +222,7 @@ export async function parseEntry(entry: CollectionEntry<"diary">) {
         const match = cardContent.match(new RegExp(`${field}:\s*(.+)`, 'm'));
         return match ? match[1].trim() : undefined;
       };
-      
+
       const parseNumber = (field: string): number | undefined => {
         const value = parseField(field);
         return value ? parseFloat(value) : undefined;
@@ -206,7 +231,7 @@ export async function parseEntry(entry: CollectionEntry<"diary">) {
       const title = parseField('title');
       if (title) {
         const optimizedPoster = await optimizePosterPath(parseField('poster'));
-        
+
         tvData = {
           id: parseField('id'),
           title,
@@ -233,7 +258,7 @@ export async function parseEntry(entry: CollectionEntry<"diary">) {
         const match = cardContent.match(new RegExp(`${field}:\s*(.+)`, 'm'));
         return match ? match[1].trim() : undefined;
       };
-      
+
       const parseNumber = (field: string): number | undefined => {
         const value = parseField(field);
         return value ? parseFloat(value) : undefined;
@@ -242,7 +267,7 @@ export async function parseEntry(entry: CollectionEntry<"diary">) {
       const title = parseField('title');
       if (title) {
         const optimizedPoster = await optimizePosterPath(parseField('poster'));
-        
+
         bookData = {
           id: parseField('id'),
           title,
@@ -269,7 +294,7 @@ export async function parseEntry(entry: CollectionEntry<"diary">) {
         const match = cardContent.match(new RegExp(`${field}:\s*(.+)`, 'm'));
         return match ? match[1].trim() : undefined;
       };
-      
+
       const parseNumber = (field: string): number | undefined => {
         const value = parseField(field);
         return value ? parseFloat(value) : undefined;
@@ -278,7 +303,7 @@ export async function parseEntry(entry: CollectionEntry<"diary">) {
       const title = parseField('title');
       if (title) {
         const optimizedPoster = await optimizePosterPath(parseField('poster'));
-        
+
         musicData = {
           title,
           author: parseField('author'),

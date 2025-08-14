@@ -1,9 +1,12 @@
-import { optimizeImage, type ImageOptimizeOptions } from "@/utils/optimizeImages";
+import {
+  optimizeImage,
+  type ImageOptimizeOptions,
+} from "@/utils/optimizeImages";
 import { getVideoPath } from "@/utils/videoUtils";
 import type { CollectionEntry } from "astro:content";
 
 // 通用的poster路径优化函数
-async function optimizePosterPath (
+async function optimizePosterPath(
   posterPath: string | undefined,
   options?: ImageOptimizeOptions
 ): Promise<string | undefined> {
@@ -72,11 +75,11 @@ interface LocalMusicData {
 }
 
 // 解析日记条目的函数
-export async function parseEntry (entry: CollectionEntry<"diary">) {
+export async function parseEntry(entry: CollectionEntry<"diary">) {
   const date = entry.id.replace(".md", "");
 
   // 解析markdown内容，提取时间段和内容
-  const content = entry.body || '';
+  const content = entry.body || "";
   const timeBlocks = [];
 
   // 使用正则表达式匹配时间块
@@ -88,25 +91,31 @@ export async function parseEntry (entry: CollectionEntry<"diary">) {
     const blockContent = match[2];
 
     // 提取文本内容（在```imgs、```html、```card-之前的部分）
-    const textMatch = blockContent.match(/^([\s\S]*?)(?=```imgs|```html|```card-|$)/);
+    const textMatch = blockContent.match(
+      /^([\s\S]*?)(?=```imgs|```html|```card-|$)/
+    );
     let text = textMatch ? textMatch[1].trim() : blockContent.trim();
 
     // 移除代码块标识
-    text = text.replace(/```(imgs|html|card-[\s\S]*?)[\s\S]*?```/g, '').trim();
+    text = text.replace(/```(imgs|html|card-[\s\S]*?)[\s\S]*?```/g, "").trim();
 
     // 解析 Markdown 链接为 HTML 链接
-    text = text.replace(/\[([^\]]+)\]\(([^\)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer" class="text-skin-accent font-semibold underline decoration-2 underline-offset-2 hover:decoration-4 hover:text-skin-accent-2 transition-all duration-200">$1</a>');
+    text = text.replace(
+      /\[([^\]]+)\]\(([^\)]+)\)/g,
+      '<a href="$2" target="_blank" rel="noopener noreferrer" class="text-skin-accent font-semibold underline decoration-2 underline-offset-2 hover:decoration-4 hover:text-skin-accent-2 transition-all duration-200">$1</a>'
+    );
 
     // 提取图片并优化
     const images = [];
     const imgMatches = blockContent.match(/```imgs([\s\S]*?)```/);
     if (imgMatches) {
       const imgContent = imgMatches[1];
-      const imgRegex = /!\[([^\]]*)\]\(([^\s)]+)(?:\s+"([^"]*)"|\s+\'([^\']*)\')?\)/g;
+      const imgRegex =
+        /!\[([^\]]*)\]\(([^\s)]+)(?:\s+"([^"]*)"|\s+\'([^\']*)\')?\)/g;
       let imgMatch;
       while ((imgMatch = imgRegex.exec(imgContent)) !== null) {
         const src = imgMatch[2];
-        const title = imgMatch[3] || imgMatch[4] || ''; // 支持双引号或单引号的title
+        const title = imgMatch[3] || imgMatch[4] || ""; // 支持双引号或单引号的title
 
         // 处理相对路径的图片
         try {
@@ -138,38 +147,46 @@ export async function parseEntry (entry: CollectionEntry<"diary">) {
     const htmlMatches = blockContent.match(/```html([\s\S]*?)```/);
     let htmlContent = htmlMatches ? htmlMatches[1].trim() : "";
 
-    // 处理HTML中的video标签包含attachment的src和poster属性
+    // 处理HTML中包含attachment路径的媒体文件
     if (htmlContent) {
-      const videoRegex = /<video([^>]*)>/g;
-      const videoMatches = [...htmlContent.matchAll(videoRegex)];
+      // 处理所有包含attachment路径的媒体属性（src和poster）
+      const mediaAttributeMatches = [
+        ...htmlContent.matchAll(
+          /(src|poster)="((?!http)[^"]*attachment\/[^"]*?)"/gi
+        ),
+      ];
 
-      for (const match of videoMatches) {
-        const [fullMatch, attributes] = match;
-        let newAttributes = attributes;
+      for (const match of mediaAttributeMatches) {
+        const [fullMatch, attribute, src] = match;
 
-        // 处理src属性
-        const srcMatch = attributes.match(/src="([^"]*attachment[^"]*?)"/);
-        if (srcMatch) {
-          const [srcAttr, src] = srcMatch;
-          const optimizedSrc = getVideoPath(src);
-          newAttributes = newAttributes.replace(srcAttr, `src="${optimizedSrc}"`);
-        }
-
-        // 处理poster属性
-        const posterMatch = attributes.match(/poster="([^"]*attachment[^"]*?)"/);
-        if (posterMatch) {
-          const [posterAttr, posterSrc] = posterMatch;
+        if (
+          src.match(
+            /\.(mp4|webm|ogg|avi|mov|wmv|flv|mkv|mp3|wav|ogg|aac|flac|m4a)$/i
+          )
+        ) {
+          // 视频和音频文件使用getVideoPath处理
+          const videoPath = getVideoPath(src);
+          htmlContent = htmlContent.replace(
+            fullMatch,
+            `${attribute}="${videoPath}"`
+          );
+        } else if (
+          src.match(/\.(jpg|jpeg|png|gif|bmp|webp|svg|ico|tiff|tif)$/i)
+        ) {
+          // 图片文件使用optimizeImage处理
           try {
-            const optimizedInfo = await optimizeImage(posterSrc, { keepOriginalSize: true, quality: 50 });
-            newAttributes = newAttributes.replace(posterAttr, `poster="${optimizedInfo.thumbnail}"`);
+            const isPoster = attribute.toLowerCase() === "poster";
+            const optimizedInfo = await optimizeImage(
+              src,
+              isPoster ? { keepOriginalSize: true, quality: 50 } : undefined
+            );
+            htmlContent = htmlContent.replace(
+              fullMatch,
+              `${attribute}="${optimizedInfo.thumbnail}"`
+            );
           } catch {
             // 失败时保持原始路径
           }
-        }
-
-        if (newAttributes !== attributes) {
-          const newVideoTag = `<video${newAttributes}>`;
-          htmlContent = htmlContent.replace(fullMatch, newVideoTag);
         }
       }
     }
@@ -182,7 +199,7 @@ export async function parseEntry (entry: CollectionEntry<"diary">) {
 
       // 解析电影信息
       const parseField = (field: string): string | undefined => {
-        const match = cardContent.match(new RegExp(`${field}:\s*(.+)`, 'm'));
+        const match = cardContent.match(new RegExp(`${field}:\s*(.+)`, "m"));
         return match ? match[1].trim() : undefined;
       };
 
@@ -191,22 +208,22 @@ export async function parseEntry (entry: CollectionEntry<"diary">) {
         return value ? parseFloat(value) : undefined;
       };
 
-      const title = parseField('title');
+      const title = parseField("title");
       if (title) {
-        const optimizedPoster = await optimizePosterPath(parseField('poster'));
+        const optimizedPoster = await optimizePosterPath(parseField("poster"));
 
         movieData = {
-          id: parseNumber('id'),
+          id: parseNumber("id"),
           title,
-          release_date: parseField('release_date'),
-          region: parseField('region'),
-          rating: parseNumber('rating'),
-          runtime: parseNumber('runtime'),
-          genres: parseField('genres'),
-          overview: parseField('overview'),
+          release_date: parseField("release_date"),
+          region: parseField("region"),
+          rating: parseNumber("rating"),
+          runtime: parseNumber("runtime"),
+          genres: parseField("genres"),
+          overview: parseField("overview"),
           poster: optimizedPoster,
-          source: parseField('source'),
-          external_url: parseField('external_url')
+          source: parseField("source"),
+          external_url: parseField("external_url"),
         };
       }
     }
@@ -219,7 +236,7 @@ export async function parseEntry (entry: CollectionEntry<"diary">) {
 
       // 解析TV信息
       const parseField = (field: string): string | undefined => {
-        const match = cardContent.match(new RegExp(`${field}:\s*(.+)`, 'm'));
+        const match = cardContent.match(new RegExp(`${field}:\s*(.+)`, "m"));
         return match ? match[1].trim() : undefined;
       };
 
@@ -228,21 +245,21 @@ export async function parseEntry (entry: CollectionEntry<"diary">) {
         return value ? parseFloat(value) : undefined;
       };
 
-      const title = parseField('title');
+      const title = parseField("title");
       if (title) {
-        const optimizedPoster = await optimizePosterPath(parseField('poster'));
+        const optimizedPoster = await optimizePosterPath(parseField("poster"));
 
         tvData = {
-          id: parseField('id'),
+          id: parseField("id"),
           title,
-          release_date: parseField('release_date'),
-          region: parseField('region'),
-          rating: parseNumber('rating'),
-          genres: parseField('genres'),
-          overview: parseField('overview'),
+          release_date: parseField("release_date"),
+          region: parseField("region"),
+          rating: parseNumber("rating"),
+          genres: parseField("genres"),
+          overview: parseField("overview"),
           poster: optimizedPoster,
-          source: parseField('source'),
-          external_url: parseField('external_url')
+          source: parseField("source"),
+          external_url: parseField("external_url"),
         };
       }
     }
@@ -255,7 +272,7 @@ export async function parseEntry (entry: CollectionEntry<"diary">) {
 
       // 解析书籍信息
       const parseField = (field: string): string | undefined => {
-        const match = cardContent.match(new RegExp(`${field}:\s*(.+)`, 'm'));
+        const match = cardContent.match(new RegExp(`${field}:\s*(.+)`, "m"));
         return match ? match[1].trim() : undefined;
       };
 
@@ -264,22 +281,21 @@ export async function parseEntry (entry: CollectionEntry<"diary">) {
         return value ? parseFloat(value) : undefined;
       };
 
-      const title = parseField('title');
+      const title = parseField("title");
       if (title) {
-        const optimizedPoster = await optimizePosterPath(parseField('poster'));
+        const optimizedPoster = await optimizePosterPath(parseField("poster"));
 
         bookData = {
-          id: parseField('id'),
+          id: parseField("id"),
           title,
-          release_date: parseField('release_date'),
-          author: parseField('author'),
-          rating: parseNumber('rating'),
-          genres: parseField('genres'),
-          overview: parseField('overview'),
+          release_date: parseField("release_date"),
+          author: parseField("author"),
+          rating: parseNumber("rating"),
+          genres: parseField("genres"),
+          overview: parseField("overview"),
           poster: optimizedPoster,
-          external_url: parseField('external_url')
+          external_url: parseField("external_url"),
         };
-
       }
     }
 
@@ -291,7 +307,7 @@ export async function parseEntry (entry: CollectionEntry<"diary">) {
 
       // 解析音乐信息
       const parseField = (field: string): string | undefined => {
-        const match = cardContent.match(new RegExp(`${field}:\s*(.+)`, 'm'));
+        const match = cardContent.match(new RegExp(`${field}:\s*(.+)`, "m"));
         return match ? match[1].trim() : undefined;
       };
 
@@ -300,31 +316,48 @@ export async function parseEntry (entry: CollectionEntry<"diary">) {
         return value ? parseFloat(value) : undefined;
       };
 
-      const title = parseField('title');
+      const title = parseField("title");
       if (title) {
-        const optimizedPoster = await optimizePosterPath(parseField('poster'));
+        const optimizedPoster = await optimizePosterPath(parseField("poster"));
 
         musicData = {
           title,
-          author: parseField('author'),
-          album: parseField('album'),
-          duration: parseNumber('duration'),
-          genres: parseField('genres'),
+          author: parseField("author"),
+          album: parseField("album"),
+          duration: parseNumber("duration"),
+          genres: parseField("genres"),
           poster: optimizedPoster,
-          url: parseField('url')
+          url: parseField("url"),
         };
       }
     }
 
-    if (text || images.length > 0 || htmlContent || movieData || tvData || bookData || musicData) {
-      timeBlocks.push({ time, text, images, htmlContent, movieData, tvData, bookData, musicData });
+    if (
+      text ||
+      images.length > 0 ||
+      htmlContent ||
+      movieData ||
+      tvData ||
+      bookData ||
+      musicData
+    ) {
+      timeBlocks.push({
+        time,
+        text,
+        images,
+        htmlContent,
+        movieData,
+        tvData,
+        bookData,
+        musicData,
+      });
     }
   }
 
   // 按时间倒序排列时间块（最新的时间在前）
   timeBlocks.sort((a, b) => {
-    const timeA = a.time.replace(':', '');
-    const timeB = b.time.replace(':', '');
+    const timeA = a.time.replace(":", "");
+    const timeB = b.time.replace(":", "");
     return timeB.localeCompare(timeA);
   });
 

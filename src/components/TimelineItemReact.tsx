@@ -257,6 +257,7 @@ const TimelineItemReact: React.FC<TimelineItemProps> = ({
                 <div
                   className="html-content prose prose-sm mb-4 max-w-none"
                   dangerouslySetInnerHTML={{ __html: htmlContent }}
+                  suppressHydrationWarning={true}
                 />
               )}
 

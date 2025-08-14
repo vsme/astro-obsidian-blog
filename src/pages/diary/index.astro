@@ -36,6 +36,20 @@ const paginationInfo = {
 };
 ---
 
+<script>
+  import "vidstack/player/styles/base.css";
+  import "vidstack/player/styles/plyr/theme.css";
+  import "vidstack/player";
+  import "vidstack/player/layouts/plyr";
+  import "vidstack/player/ui";
+</script>
+
+<style>
+  :global(media-player[muted] .plyr__controls .plyr__volume) {
+    display: none;
+  }
+</style>
+
 <Layout title={`碎碎念 | ${SITE.title}`}>
   <Header />
 
@@ -45,15 +59,8 @@ const paginationInfo = {
       class="from-skin-fill via-skin-card to-skin-fill mx-auto min-h-screen max-w-app bg-gradient-to-br px-4 pt-4"
     >
       <div class="min-h-screen">
-        <!-- 页面标题 -->
-        <div class="py-8">
-          <h1 class="text-skin-accent mb-2 text-2xl font-bold">碎碎念</h1>
-          <p class="text-skin-base/70 text-sm">记录生活中的点点滴滴</p>
-        </div>
-
         <!-- 主要内容区域 -->
         <div class="py-8">
-          <!-- 日记内容容器 -->
           <div id="diary-content">
             <DiaryTimeline
               client:load

@@ -117,9 +117,8 @@ const MediaCard: React.FC<MediaCardProps> = ({
             <img
               src={posterUrl}
               alt={title}
-              className={`w-full rounded-md object-cover shadow-sm ${
-                cardType === "music" ? "aspect-square" : "aspect-[2/3]"
-              }`}
+              className={`w-full rounded-md object-cover shadow-sm ${cardType === "music" ? "aspect-square" : "aspect-[2/3]"
+                }`}
             />
 
           </div>
@@ -229,7 +228,7 @@ const MediaCard: React.FC<MediaCardProps> = ({
           {/* 类型标签 */}
           <div className="mb-3 flex flex-wrap justify-center gap-1.5 sm:justify-start">
             {genres &&
-              genres.split(",").map((genre, index) => (
+              genres.split(/[,，]/).map((genre, index) => (
                 <span
                   key={index}
                   className="rounded-full border border-accent/20 bg-accent/10 px-2.5 py-1 text-xs font-medium text-accent transition-colors hover:bg-accent/15"

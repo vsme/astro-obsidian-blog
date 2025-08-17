@@ -125,11 +125,11 @@ const nextPost =
       {tags.map(tag => <Tag tag={slugifyStr(tag)} tagName={tag} />)}
     </ul>
 
-    <BackToTopButton />
-
     <ShareLinks />
 
     <hr class="my-6 border-dashed" />
+
+    <BackToTopButton />
 
     <!-- Previous/Next Post Buttons -->
     <div data-pagefind-ignore class="grid grid-cols-1 gap-6 sm:grid-cols-2">
@@ -293,8 +293,8 @@ const nextPost =
             setTimeout(() => {
               copyButton.textContent = originalText;
             }, 700);
-          } catch (err) {
-            console.error("Failed to copy code:", err);
+          } catch {
+            // console.error("Failed to copy code:", err);
           }
         });
 

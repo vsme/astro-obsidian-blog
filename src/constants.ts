@@ -89,16 +89,16 @@ export const SHARE_LINKS: Social[] = [
   //   linkTitle: `Share this post on Pinterest`,
   //   icon: IconPinterest,
   // },
-  {
-    name: "Bilibili",
-    href: "###",
-    linkTitle: `分享到哔哩哔哩`,
-    icon: IconBili,
-  },
-  {
-    name: "Mail",
-    href: "mailto:hi@yaavi.me?subject=See%20this%20post&body=",
-    linkTitle: `发送邮件分享`,
-    icon: IconMail,
-  },
+  // {
+  //   name: "Bilibili",
+  //   href: "###",
+  //   linkTitle: `分享到哔哩哔哩`,
+  //   icon: IconBili,
+  // },
+  // {
+  //   name: "Mail",
+  //   href: "mailto:hi@yaavi.me?subject=See%20this%20post&body=",
+  //   linkTitle: `发送邮件分享`,
+  //   icon: IconMail,
+  // },
 ] as const;

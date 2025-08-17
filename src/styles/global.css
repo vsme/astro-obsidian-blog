@@ -150,18 +150,18 @@ h6 {
 .image-item {
   /* 为不支持 aspect-ratio 的浏览器提供 fallback */
   &::before {
-    content: '';
+    content: "";
     display: block;
     padding-top: 100%; /* 1:1 aspect ratio */
   }
-  
+
   /* 当支持 aspect-ratio 时，移除 padding-top */
   @supports (aspect-ratio: 1 / 1) {
     &::before {
       display: none;
     }
   }
-  
+
   img {
     position: absolute;
     top: 0;
@@ -170,4 +170,138 @@ h6 {
     height: 100%;
     object-fit: cover;
   }
+}
+
+/* 视频播放器样式 - 默认隐藏控制器，播放后展示 */
+video {
+  @apply w-full rounded-lg;
+  
+  /* 默认隐藏控制器 */
+  &::-webkit-media-controls {
+    opacity: 0;
+    transition: opacity 0.3s ease;
+  }
+  
+  &::-webkit-media-controls-panel {
+    opacity: 0;
+    transition: opacity 0.3s ease;
+  }
+  
+  /* Firefox 兼容性 */
+  &::-moz-media-controls {
+    opacity: 0;
+    transition: opacity 0.3s ease;
+  }
+  
+  /* 通用样式 - 使用 JavaScript 控制 */
+  &.video-controls-hidden {
+    &::-webkit-media-controls,
+    &::-webkit-media-controls-panel {
+      opacity: 0;
+    }
+    
+    &::-moz-media-controls {
+      opacity: 0;
+    }
+    
+    /* 隐藏进度条背景轨道 - 使用opacity避免跳动 */
+    &::-webkit-media-controls-timeline {
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity 0.3s ease, visibility 0.3s ease;
+    }
+    
+    &::-webkit-media-controls-current-time-display,
+    &::-webkit-media-controls-time-remaining-display {
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity 0.3s ease, visibility 0.3s ease;
+    }
+  }
+  
+  /* 对于有muted属性的视频，隐藏音量按钮 */
+  &[muted] {
+    &::-webkit-media-controls-mute-button {
+      display: none;
+    }
+    
+    &::-webkit-media-controls-volume-slider {
+      display: none;
+    }
+    
+    /* Firefox 兼容性 */
+    &::-moz-media-controls-volume-control {
+      display: none;
+    }
+  }
+  
+  &.video-controls-visible {
+    &::-webkit-media-controls,
+    &::-webkit-media-controls-panel {
+      opacity: 1;
+    }
+    
+    &::-moz-media-controls {
+      opacity: 1;
+    }
+    
+    /* 显示进度条背景轨道 - 使用opacity避免跳动 */
+    &::-webkit-media-controls-timeline {
+      opacity: 1;
+      visibility: visible;
+      transition: opacity 0.3s ease, visibility 0.3s ease;
+    }
+    
+    &::-webkit-media-controls-current-time-display,
+    &::-webkit-media-controls-time-remaining-display {
+      opacity: 1;
+      visibility: visible;
+      transition: opacity 0.3s ease, visibility 0.3s ease;
+    }
+  }
+}
+
+/* 自定义播放按钮样式 */
+.video-container {
+  position: relative;
+  display: inline-block;
+  width: 100%;
+}
+
+.video-play-button {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 80px;
+  height: 80px;
+  background: rgba(0, 0, 0, 0.7);
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s ease;
+  z-index: 10;
+}
+
+.video-play-button:hover {
+  background: rgba(0, 0, 0, 0.9);
+  transform: translate(-50%, -50%) scale(1.1);
+}
+
+.video-play-button::before {
+  content: '';
+  width: 0;
+  height: 0;
+  border-left: 20px solid white;
+  border-top: 12px solid transparent;
+  border-bottom: 12px solid transparent;
+  margin-left: 4px;
+}
+
+.video-play-button.hidden {
+  opacity: 0;
+  pointer-events: none;
 }

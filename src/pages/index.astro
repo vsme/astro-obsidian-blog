@@ -1,111 +1,89 @@
 ---
-import { getCollection } from "astro:content";
-import Layout from "@/layouts/Layout.astro";
-import Header from "@/components/Header.astro";
 import Footer from "@/components/Footer.astro";
-import Socials from "@/components/Socials.astro";
-import LinkButton from "@/components/LinkButton.astro";
-import Card from "@/components/Card.astro";
-import Hr from "@/components/Hr.astro";
-import getSortedPosts from "@/utils/getSortedPosts";
-import IconRss from "@/assets/icons/IconRss.svg";
-import IconArrowRight from "@/assets/icons/IconArrowRight.svg";
+import Header from "@/components/Header.astro";
+import BackToTopButton from "@/components/BackToTopButton.astro";
 import { SITE } from "@/config";
-import { SOCIALS } from "@/constants";
-import { Magnetic } from "@/components/animate-ui/effects/magnetic.tsx";
+import Layout from "@/layouts/Layout.astro";
+import { getCollection } from "astro:content";
+import { parseEntry } from "@/utils/parseEntry";
+import DiaryTimeline from "@/components/DiaryTimeline.tsx";
 
-const posts = await getCollection("blog");
+const diaryEntries = await getCollection("diary");
 
-const sortedPosts = getSortedPosts(posts);
-const featuredPosts = sortedPosts.filter(({ data }) => data.featured);
-const recentPosts = sortedPosts.filter(({ data }) => !data.featured);
+// 按文件名（日期）排序，最新的在前
+// 同时确保同一天内的时间块也按时间倒序排列
+const sortedEntries = diaryEntries.sort((a, b) => {
+  const dateA = a.id.replace(".md", "");
+  const dateB = b.id.replace(".md", "");
+  return dateB.localeCompare(dateA);
+});
+
+// 分页设置
+const ITEMS_PER_PAGE = 5;
+const initialEntries = sortedEntries.slice(0, ITEMS_PER_PAGE);
+
+// 解析初始数据
+const initialParsedEntries = await Promise.all(initialEntries.map(parseEntry));
+
+// 为了性能考虑，只解析初始数据，其他数据通过API端点按需加载
+// 创建分页数据结构
+const totalPages = Math.ceil(sortedEntries.length / ITEMS_PER_PAGE);
+const paginationInfo = {
+  currentPage: 1,
+  totalPages,
+  hasMore: totalPages > 1,
+  itemsPerPage: ITEMS_PER_PAGE,
+};
 ---
 
-<Layout>
+<style>
+  :global(media-player[muted] .plyr__controls .plyr__volume) {
+    display: none;
+  }
+</style>
+
+<Layout title={`碎碎念 | ${SITE.title}`}>
   <Header />
-  <main id="main-content" data-layout="index">
-    <section id="hero" class="pt-8 pb-6">
-      <h1 class="my-4 inline-block text-4xl font-bold sm:my-8 sm:text-5xl">
-        bgo.me
-      </h1>
-      <a
-        target="_blank"
-        href="/rss.xml"
-        class="inline-block"
-        aria-label="rss feed"
-        title="RSS Feed"
-      >
-        <IconRss
-          width={20}
-          height={20}
-          class="scale-125 stroke-accent stroke-3 rtl:-rotate-90"
-        />
-        <span class="sr-only">RSS Feed</span>
-      </a>
 
-      <p>零散的思绪中流淌着日常的温暖</p>
-
-      {
-        // only display if at least one social link is enabled
-        SOCIALS.length > 0 && (
-          <div class="mt-4 flex flex-col sm:flex-row sm:items-center">
-            <div class="me-2 mb-1 whitespace-nowrap sm:mb-0">联系我:</div>
-            <Socials />
+  <main id="main-content">
+    <section
+      id="diary"
+      class="from-skin-fill via-skin-card to-skin-fill mx-auto min-h-screen max-w-app bg-gradient-to-br px-4 pt-4"
+    >
+      <div class="min-h-screen">
+        <!-- 主要内容区域 -->
+        <div class="py-8">
+          <div id="diary-content">
+            <DiaryTimeline
+              client:load
+              initialEntries={initialParsedEntries}
+              paginationInfo={paginationInfo}
+            />
           </div>
-        )
-      }
+        </div>
+
+        <BackToTopButton />
+      </div>
     </section>
-
-    <Hr />
-
-    {
-      featuredPosts.length > 0 && (
-        <>
-          <section id="featured" class="pt-12 pb-6">
-            <h2 class="text-2xl font-semibold tracking-wide">精选文章</h2>
-            <ul>
-              {featuredPosts.map(data => (
-                <Card variant="h3" {...data} />
-              ))}
-            </ul>
-          </section>
-          {recentPosts.length > 0 && <Hr />}
-        </>
-      )
-    }
-
-    {
-      recentPosts.length > 0 && (
-        <section id="recent-posts" class="pt-12 pb-6">
-          <h2 class="text-2xl font-semibold tracking-wide">最新文章</h2>
-          <ul>
-            {recentPosts.map(
-              (data, index) =>
-                index < SITE.postPerIndex && <Card variant="h3" {...data} />
-            )}
-          </ul>
-        </section>
-      )
-    }
-
-    <div class="my-8 text-center">
-      <Magnetic client:idle>
-        <LinkButton href="/posts/">
-          更多文章
-          <IconArrowRight class="inline-block rtl:-rotate-180" />
-        </LinkButton>
-      </Magnetic>
-    </div>
   </main>
+
   <Footer />
 </Layout>
 
-<script>
-  document.addEventListener("astro:page-load", () => {
-    const indexLayout = (document.querySelector("#main-content") as HTMLElement)
-      ?.dataset?.layout;
-    if (indexLayout) {
-      sessionStorage.setItem("backUrl", "/");
+<style>
+  /* 添加一些动画效果 */
+  @keyframes fadeInUp {
+    from {
+      opacity: 0;
+      transform: translateY(20px);
     }
-  });
-</script>
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .diary-item {
+    animation: fadeInUp 0.6s ease-out;
+  }
+</style>

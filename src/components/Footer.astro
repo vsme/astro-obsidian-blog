@@ -16,7 +16,10 @@ const { noMarginTop = false } = Astro.props;
   <div
     class="flex flex-col items-center justify-between py-6 sm:flex-row-reverse sm:py-4"
   >
-    <Socials centered />
+    <div class="flex flex-col items-center gap-1 sm:flex-row">
+      <span class="italic">联系我<span class="hidden sm:inline">：</span></span>
+      <Socials centered />
+    </div>
     <div class="my-2 flex flex-col items-center whitespace-nowrap sm:flex-row">
       <span>Copyright &#169; {currentYear}</span>
       <span class="hidden sm:inline">&nbsp;|&nbsp;</span>

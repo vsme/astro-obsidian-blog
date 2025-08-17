@@ -144,12 +144,6 @@
     return playButton;
   }
 
-  // DOM加载完成后初始化
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", initVideoControls);
-  } else {
-    initVideoControls();
-  }
 
   // 监听动态添加的视频元素
   const observer = new MutationObserver(mutations => {
@@ -157,9 +151,12 @@
       mutation.addedNodes.forEach(node => {
         if (node.nodeType === Node.ELEMENT_NODE) {
           if (node.tagName === "VIDEO") {
-            initVideoControls();
+            setupVideoControls(node);
           } else if (node.querySelector && node.querySelector("video")) {
-            initVideoControls();
+            const videos = node.querySelectorAll("video");
+            videos.forEach(video => {
+              setupVideoControls(video);
+            });
           }
         }
       });
@@ -183,4 +180,9 @@
       }
     });
   }
+
+  // 监听Astro页面导航事件，重新初始化视频控制器
+  document.addEventListener("astro:page-load", () => {
+    initVideoControls();
+  });
 })();

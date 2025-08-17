@@ -174,7 +174,7 @@ h6 {
 
 /* 视频播放器样式 - 默认隐藏控制器，播放后展示 */
 video {
-  @apply w-full rounded-lg;
+  @apply w-full rounded-lg my-0;
   
   /* 默认隐藏控制器 */
   &::-webkit-media-controls {

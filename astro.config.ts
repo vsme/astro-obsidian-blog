@@ -18,6 +18,7 @@ import { SITE } from "./src/config";
 import react from "@astrojs/react";
 import remarkWrap from "./src/utils/remarkWrap";
 import rehypeHeadingLinks from "./src/utils/rehypeHeadingLinks";
+import { compressPublicJS } from "./src/utils/vite-public-compress";
 
 
 // https://astro.build/config
@@ -67,7 +68,7 @@ export default defineConfig({
     // @ts-ignore
     // This will be fixed in Astro 6 with Vite 7 support
     // See: https://github.com/withastro/astro/issues/14030
-    plugins: [tailwindcss()],
+    plugins: [tailwindcss(), compressPublicJS()],
     optimizeDeps: {
       exclude: ["@resvg/resvg-js"],
     },

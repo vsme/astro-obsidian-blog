@@ -67,10 +67,11 @@ export interface TimeBlock {
 
 export interface DiaryEntryProps {
   date: string;
+  hideYear?: boolean;
   timeBlocks: TimeBlock[];
 }
 
-const DiaryEntryReact: React.FC<DiaryEntryProps> = ({ date, timeBlocks }) => {
+const DiaryEntryReact: React.FC<DiaryEntryProps> = ({ date, hideYear = false, timeBlocks }) => {
   // 格式化日期显示
   const formatDate = (dateStr: string) => {
     const date = new Date(dateStr);
@@ -100,11 +101,13 @@ const DiaryEntryReact: React.FC<DiaryEntryProps> = ({ date, timeBlocks }) => {
             <div className="text-skin-base text-base leading-tight font-medium">
               {new Date(date).toLocaleDateString("zh-CN", { weekday: "short" })}
             </div>
-            <div className="text-skin-base/70 text-sm leading-tight">
-              {new Date(date).toLocaleDateString("zh-CN", {
-                year: "numeric",
-              })}
-            </div>
+            {
+              !hideYear && <div className="text-skin-base/70 text-sm leading-tight">
+                {new Date(date).toLocaleDateString("zh-CN", {
+                  year: "numeric",
+                })}
+              </div>
+            }
           </div>
         </div>
       </div>

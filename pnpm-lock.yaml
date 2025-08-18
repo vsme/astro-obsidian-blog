@@ -141,9 +141,6 @@ importers:
       astro-compress:
         specifier: ^2.3.8
         version: 2.3.8(@types/node@22.13.14)(jiti@2.4.2)(rollup@4.41.1)(typescript@5.8.3)(yaml@2.7.0)
-      esbuild:
-        specifier: ^0.25.9
-        version: 0.25.9
       eslint:
         specifier: ^9.30.1
         version: 9.30.1(jiti@2.4.2)
@@ -5226,7 +5223,7 @@ snapshots:
       unstorage: 1.15.0
       vfile: 6.0.3
       vite: 6.3.5(@types/node@22.13.14)(jiti@2.4.2)(lightningcss@1.29.3)(terser@5.39.0)(yaml@2.7.0)
-      vitefu: 1.0.6(vite@6.3.5(@types/node@22.13.14)(jiti@2.4.2)(lightningcss@1.30.1)(terser@5.43.1)(yaml@2.7.0))
+      vitefu: 1.0.6(vite@6.3.5(@types/node@22.13.14)(jiti@2.4.2)(lightningcss@1.29.3)(terser@5.39.0)(yaml@2.7.0))
       xxhash-wasm: 1.1.0
       yargs-parser: 21.1.1
       yocto-spinner: 0.2.1
@@ -7766,6 +7763,10 @@ snapshots:
       lightningcss: 1.30.1
       terser: 5.43.1
       yaml: 2.7.0
+
+  vitefu@1.0.6(vite@6.3.5(@types/node@22.13.14)(jiti@2.4.2)(lightningcss@1.29.3)(terser@5.39.0)(yaml@2.7.0)):
+    optionalDependencies:
+      vite: 6.3.5(@types/node@22.13.14)(jiti@2.4.2)(lightningcss@1.29.3)(terser@5.39.0)(yaml@2.7.0)
 
   vitefu@1.0.6(vite@6.3.5(@types/node@22.13.14)(jiti@2.4.2)(lightningcss@1.30.1)(terser@5.43.1)(yaml@2.7.0)):
     optionalDependencies:

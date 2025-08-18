@@ -21,7 +21,7 @@ html[data-theme="light"] {
   --background: #fdfdfd;
   --foreground: #282728;
   --accent: #006658;
-  --muted: #e6e6e6;
+  --muted: #c5ced0;
   --border: #c6d7d8;
 }
 
@@ -174,89 +174,97 @@ h6 {
 
 /* 视频播放器样式 - 默认隐藏控制器，播放后展示 */
 video {
-  @apply w-full rounded-lg my-0;
-  
+  @apply my-0 w-full rounded-lg;
+
   /* 默认隐藏控制器 */
   &::-webkit-media-controls {
     opacity: 0;
     transition: opacity 0.3s ease;
   }
-  
+
   &::-webkit-media-controls-panel {
     opacity: 0;
     transition: opacity 0.3s ease;
   }
-  
+
   /* Firefox 兼容性 */
   &::-moz-media-controls {
     opacity: 0;
     transition: opacity 0.3s ease;
   }
-  
+
   /* 通用样式 - 使用 JavaScript 控制 */
   &.video-controls-hidden {
     &::-webkit-media-controls,
     &::-webkit-media-controls-panel {
       opacity: 0;
     }
-    
+
     &::-moz-media-controls {
       opacity: 0;
     }
-    
+
     /* 隐藏进度条背景轨道 - 使用opacity避免跳动 */
     &::-webkit-media-controls-timeline {
       opacity: 0;
       visibility: hidden;
-      transition: opacity 0.3s ease, visibility 0.3s ease;
+      transition:
+        opacity 0.3s ease,
+        visibility 0.3s ease;
     }
-    
+
     &::-webkit-media-controls-current-time-display,
     &::-webkit-media-controls-time-remaining-display {
       opacity: 0;
       visibility: hidden;
-      transition: opacity 0.3s ease, visibility 0.3s ease;
+      transition:
+        opacity 0.3s ease,
+        visibility 0.3s ease;
     }
   }
-  
+
   /* 对于有muted属性的视频，隐藏音量按钮 */
   &[muted] {
     &::-webkit-media-controls-mute-button {
       display: none;
     }
-    
+
     &::-webkit-media-controls-volume-slider {
       display: none;
     }
-    
+
     /* Firefox 兼容性 */
     &::-moz-media-controls-volume-control {
       display: none;
     }
   }
-  
+
   &.video-controls-visible {
     &::-webkit-media-controls,
     &::-webkit-media-controls-panel {
       opacity: 1;
     }
-    
+
     &::-moz-media-controls {
       opacity: 1;
     }
-    
+
     /* 显示进度条背景轨道 - 使用opacity避免跳动 */
     &::-webkit-media-controls-timeline {
       opacity: 1;
       visibility: visible;
-      transition: opacity 0.3s ease, visibility 0.3s ease;
+      transition:
+        opacity 0.3s ease,
+        visibility 0.3s ease;
     }
-    
+
     &::-webkit-media-controls-current-time-display,
     &::-webkit-media-controls-time-remaining-display {
       opacity: 1;
       visibility: visible;
-      transition: opacity 0.3s ease, visibility 0.3s ease;
+      transition:
+        opacity 0.3s ease,
+        visibility 0.3s ease;
     }
   }
 }
@@ -292,7 +300,7 @@ video {
 }
 
 .video-play-button::before {
-  content: '';
+  content: "";
   width: 0;
   height: 0;
   border-left: 20px solid white;

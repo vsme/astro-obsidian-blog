@@ -120,7 +120,6 @@ const MediaCard: React.FC<MediaCardProps> = ({
               className={`w-full rounded-md object-cover shadow-sm ${cardType === "music" ? "aspect-square" : "aspect-[2/3]"
                 }`}
             />
-
           </div>
         )}
 
@@ -139,18 +138,18 @@ const MediaCard: React.FC<MediaCardProps> = ({
                 {cardType === "music" ? (
                   <>
                     {author && <span>{author}</span>}
-                    {album && <span>• {album}</span>}
-                    {duration && <span>• {formatDuration(duration)}</span>}
+                    {album && <span>{`• ${album}`}</span>}
+                    {duration && <span>{`• ${formatDuration(duration)}`}</span>}
                   </>
                 ) : (
                   <>
                     {release_date && (
-                      <span>
-                        {formatReleaseDate(release_date)}
-                        {(cardType === 'book' ? author : region) && ` (${cardType === 'book' ? author : region})`}
-                      </span>
+                      <>
+                        <span>{formatReleaseDate(release_date)}</span>
+                        <span>{(cardType === 'book' ? author : region) && ` (${cardType === 'book' ? author : region})`}</span>
+                      </>
                     )}
-                    {runtime && <span>• {formatRuntime(runtime)}</span>}
+                    {runtime && <span>{`• ${formatRuntime(runtime)}`}</span>}
                   </>
                 )}
               </div>
@@ -158,14 +157,6 @@ const MediaCard: React.FC<MediaCardProps> = ({
 
             {/* 类型徽标和评分 */}
             <div className="flex flex-col items-center gap-2 sm:mt-0 sm:items-end">
-              {/* 类型徽标 */}
-              {/* <div className="flex items-center">
-                <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium bg-skin-card-muted text-skin-base rounded-full border border-skin-line">
-                  <span>{typeBadge.icon}</span>
-                  <span>{typeBadge.label}</span>
-                </span>
-              </div> */}
-
               {/* 评分 */}
               {mediaRating > 0 && cardType !== 'music' && (
                 <div className="flex items-center gap-1">

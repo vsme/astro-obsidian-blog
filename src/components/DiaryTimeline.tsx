@@ -16,6 +16,7 @@ export interface PaginationInfo {
 export interface DiaryTimelineProps {
   initialEntries: ParsedEntry[];
   paginationInfo: PaginationInfo;
+  hideYear?: boolean;
 }
 
 const DiaryTimeline: React.FC<DiaryTimelineProps> = ({
@@ -26,6 +27,7 @@ const DiaryTimeline: React.FC<DiaryTimelineProps> = ({
     hasMore: false,
     itemsPerPage: 5,
   },
+  hideYear = false,
 }) => {
   const [displayedEntries, setDisplayedEntries] = useState<ParsedEntry[]>(
     initialEntries || []
@@ -128,13 +130,14 @@ const DiaryTimeline: React.FC<DiaryTimelineProps> = ({
         <DiaryEntryReact
           key={`${entry.date}-${index}`}
           date={entry.date}
+          hideYear={hideYear}
           timeBlocks={entry.timeBlocks}
         />
       ))}
 
       {displayedEntries.length === 0 && (
         <div className="py-12 text-center">
-          <p className="text-skin-base opacity-60">还没有任何碎碎念...</p>
+          <p className="text-skin-base opacity-60">还没有任何日记...</p>
         </div>
       )}
 

@@ -48,7 +48,7 @@ export default defineConfig({
           useShortDoctype: true,
           minifyCSS: true,
           minifyJS: true,
-          removeAttributeQuotes: false,
+          removeAttributeQuotes: true,
           preserveLineBreaks: false,
         },
       },

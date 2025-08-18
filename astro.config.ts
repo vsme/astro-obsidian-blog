@@ -18,18 +18,23 @@ import { SITE } from "./src/config";
 import react from "@astrojs/react";
 import remarkWrap from "./src/utils/remarkWrap";
 import rehypeHeadingLinks from "./src/utils/rehypeHeadingLinks";
+import pagefind from "astro-pagefind";
 
 import compress from "astro-compress";
 
 // https://astro.build/config
 export default defineConfig({
   site: SITE.website,
+  build: {
+    format: "file",
+  },
   integrations: [
     mdx(),
     sitemap({
       filter: page => SITE.showArchives || !page.endsWith("/archives"),
     }),
     react(),
+    pagefind(),
     compress({
       CSS: true,
       HTML: {

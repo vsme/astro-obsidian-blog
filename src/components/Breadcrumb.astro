@@ -1,6 +1,9 @@
 ---
 // Remove current url path and remove trailing slash if exists
-const currentUrlPath = Astro.url.pathname.replace(/\/+$/, "");
+let currentUrlPath = Astro.url.pathname.replace(/\/+$/, "");
+
+// Remove .html extension if present
+currentUrlPath = currentUrlPath.replace(/\.html$/, "");
 
 // Get url array from path
 // eg: /tags/tailwindcss => ['tags', 'tailwindcss']

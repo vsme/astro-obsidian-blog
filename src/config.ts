@@ -4,7 +4,7 @@ export const SITE = {
   profile: "https://bgo.me/",
   desc: "这里有我散落的思绪与日常的温暖片段",
   title: "Be Good One",
-  ogImage: void 0,
+  ogImage: "og.png",
   lightAndDarkMode: true,
   postPerIndex: 5,
   postPerPage: 4,

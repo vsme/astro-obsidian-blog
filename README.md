@@ -1,6 +1,6 @@
 # Be Good One
 
-一个基于 [AstroPaper](https://github.com/satnaing/astro-paper) 的个人博客网站，用于记录生活中的温暖片段和散落的思绪。
+一个基于 [Astro](https://astro.build/) 构建的个人网站，用于记录生活中的片段。
 
 ## ✨ 特性
 
@@ -29,7 +29,7 @@
 │   ├── components/      # Astro 组件
 │   ├── data/
 │   │   ├── blog/        # 博客文章
-│   │   └── diary/       # 碎碎念内容
+│   │   └── diary/       # 日常时间线
 │   ├── layouts/         # 页面布局
 │   ├── pages/           # 页面路由
 │   ├── styles/          # 样式文件

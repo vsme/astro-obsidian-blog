@@ -18,8 +18,8 @@ import { SITE } from "./src/config";
 import react from "@astrojs/react";
 import remarkWrap from "./src/utils/remarkWrap";
 import rehypeHeadingLinks from "./src/utils/rehypeHeadingLinks";
-import { compressPublicJS } from "./src/utils/vite-public-compress";
 
+import compress from "astro-compress";
 
 // https://astro.build/config
 export default defineConfig({
@@ -30,6 +30,27 @@ export default defineConfig({
       filter: page => SITE.showArchives || !page.endsWith("/archives"),
     }),
     react(),
+    compress({
+      CSS: true,
+      HTML: {
+        "html-minifier-terser": {
+          removeComments: true,
+          collapseWhitespace: true,
+          removeEmptyAttributes: true,
+          removeRedundantAttributes: true,
+          removeScriptTypeAttributes: true,
+          removeStyleLinkTypeAttributes: true,
+          useShortDoctype: true,
+          minifyCSS: true,
+          minifyJS: true,
+          removeAttributeQuotes: false,
+          preserveLineBreaks: false,
+        },
+      },
+      JavaScript: true,
+      SVG: true,
+      Image: false,
+    }),
   ],
   markdown: {
     remarkPlugins: [
@@ -37,11 +58,7 @@ export default defineConfig({
       remarkMark,
       [remarkWrap, { className: "article-toc-nav" }],
     ],
-    rehypePlugins: [
-      rehypeSlug,
-      rehypeFigure,
-      rehypeHeadingLinks,
-    ],
+    rehypePlugins: [rehypeSlug, rehypeFigure, rehypeHeadingLinks],
     shikiConfig: {
       // For more themes, visit https://shiki.style/themes
       themes: { light: "min-light", dark: "night-owl" },
@@ -53,7 +70,7 @@ export default defineConfig({
         "card-tv": "yaml",
         "card-book": "yaml",
         "card-music": "yaml",
-        "imgs": "markdown"
+        imgs: "markdown",
       },
       transformers: [
         transformerFileName({ style: "v2", hideDot: false }),
@@ -68,7 +85,7 @@ export default defineConfig({
     // @ts-ignore
     // This will be fixed in Astro 6 with Vite 7 support
     // See: https://github.com/withastro/astro/issues/14030
-    plugins: [tailwindcss(), compressPublicJS()],
+    plugins: [tailwindcss()],
     optimizeDeps: {
       exclude: ["@resvg/resvg-js"],
     },

@@ -1,0 +1,136 @@
+---
+import Footer from "@/components/Footer.astro";
+import Header from "@/components/Header.astro";
+import BackButton from "@/components/BackButton.astro";
+import BackToTopButton from "@/components/BackToTopButton.astro";
+import { SITE } from "@/config";
+import Layout from "@/layouts/Layout.astro";
+import { getCollection } from "astro:content";
+import { parseEntry } from "@/utils/parseEntry";
+import DiaryTimeline from "@/components/DiaryTimeline.tsx";
+
+export async function getStaticPaths() {
+  const diaryEntries = await getCollection("diary");
+
+  // 按季度分组日记条目
+  const quarterGroups = new Map();
+
+  diaryEntries.forEach(entry => {
+    const date = entry.id.replace(".md", "");
+    const [year, month] = date.split("-");
+    const quarter = Math.ceil(parseInt(month) / 3);
+    const quarterKey = `${year}-Q${quarter}`;
+
+    if (!quarterGroups.has(quarterKey)) {
+      quarterGroups.set(quarterKey, []);
+    }
+    quarterGroups.get(quarterKey).push(entry);
+  });
+
+  const paths = [];
+
+  // 为每个季度生成路径
+  for (const [quarterKey] of quarterGroups) {
+    paths.push({ params: { page: quarterKey } });
+  }
+
+  return paths;
+}
+
+const { page } = Astro.params;
+const quarterKey = page as string;
+
+const diaryEntries = await getCollection("diary");
+
+// 按季度过滤条目
+let quarterEntries = diaryEntries.filter(entry => {
+  const date = entry.id.replace(".md", "");
+  const [year, month] = date.split("-");
+  const quarter = Math.ceil(parseInt(month) / 3);
+  const entryQuarterKey = `${year}-Q${quarter}`;
+  return entryQuarterKey === quarterKey;
+});
+
+// 按日期排序，最新的在前
+quarterEntries = quarterEntries.sort((a, b) => {
+  const dateA = a.id.replace(".md", "");
+  const dateB = b.id.replace(".md", "");
+  return dateA.localeCompare(dateB);
+});
+
+// 解析所有季度条目（不再分页）
+const parsedEntries = await Promise.all(quarterEntries.map(parseEntry));
+
+// 生成季度标题
+const [year, quarter] = quarterKey.split("-Q");
+const quarterNames = ["春", "夏", "秋", "冬"];
+const quarterName = quarterNames[parseInt(quarter) - 1];
+const pageTitle = `${year}年(${quarterName})`;
+
+// 创建简化的分页信息（用于兼容现有组件）
+const paginationInfo = {
+  currentPage: 1,
+  totalPages: 1,
+  hasMore: false,
+  itemsPerPage: parsedEntries.length,
+};
+---
+
+<Layout title={`${pageTitle} | ${SITE.title}`}>
+  <Header />
+  <BackButton />
+  <main
+    id="main-content"
+    class:list={[
+      "mx-auto mt-4 w-full max-w-app px-4 pb-12",
+      { "mt-8": !SITE.showBackButton },
+    ]}
+    data-pagefind-body
+    data-pagefind-weight="1"
+  >
+    <h1 class="inline-block text-2xl font-bold text-accent sm:text-3xl">
+      {pageTitle}
+    </h1>
+
+    <!-- 主要内容区域 -->
+    <div class="py-8">
+      <div id="diary-content">
+        {
+          parsedEntries.length > 0 ? (
+            <DiaryTimeline
+              client:load
+              initialEntries={parsedEntries}
+              paginationInfo={paginationInfo}
+            />
+          ) : (
+            <div class="py-8 text-center">
+              <p class="text-skin-base">这个季度还没有日记</p>
+            </div>
+          )
+        }
+      </div>
+    </div>
+
+    <BackToTopButton />
+  </main>
+
+  <Footer />
+</Layout>
+
+<style>
+  /* 添加一些动画效果 */
+  @keyframes fadeInUp {
+    from {
+      opacity: 0;
+      transform: translateY(20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .diary-item {
+    animation: fadeInUp 0.6s ease-out;
+  }
+</style>

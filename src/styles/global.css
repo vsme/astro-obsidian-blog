@@ -313,3 +313,10 @@ video {
   opacity: 0;
   pointer-events: none;
 }
+
+/* 只在iOS设备上隐藏播放按钮，避免与iOS系统播放控件冲突 */
+@supports (-webkit-touch-callout: none) and (not (pointer: fine)) {
+  .video-play-button {
+    display: none !important;
+  }
+}

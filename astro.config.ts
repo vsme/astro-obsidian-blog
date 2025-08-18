@@ -26,7 +26,7 @@ import compress from "astro-compress";
 export default defineConfig({
   site: SITE.website,
   build: {
-    format: "file",
+    format: "directory",
   },
   integrations: [
     mdx(),

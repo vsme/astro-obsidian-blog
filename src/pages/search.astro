@@ -79,6 +79,9 @@ import { SITE } from "@/config";
 
   // Astro 页面切换时重新初始化
   document.addEventListener("astro:after-swap", initSearchFromURL);
+
+  // 首次加载初始化搜索
+  initSearchFromURL();
 </script>
 
 <style is:global>

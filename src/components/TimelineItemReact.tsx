@@ -183,7 +183,7 @@ const TimelineItemReact: React.FC<TimelineItemProps> = ({
             id={date ? `diary-${date}-${time.replace(/:/g, "-")}` : undefined}
             className="text-skin-base/60 m-0 flex-shrink-0 pr-2 pl-0 text-base font-medium"
           >
-            <span className="hidden">{date}</span>{time}
+            <span className="hidden">{date}</span>{` ${time}`}
           </h3>
           {/* 内容区域 */}
           <div className="min-w-0 flex-1">

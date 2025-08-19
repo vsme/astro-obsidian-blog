@@ -138,7 +138,7 @@ const DiaryEntryReact: React.FC<DiaryEntryProps> = ({
   }, [date]);
 
   return (
-    <div className="date-group mb-16">
+    <div className="date-group mb-16" data-pagefind-weight="2">
       <div className="mb-8">
         <div className="flex items-baseline gap-3">
           <div className="text-skin-accent text-3xl leading-none font-bold">
@@ -166,6 +166,7 @@ const DiaryEntryReact: React.FC<DiaryEntryProps> = ({
           <TimelineItemReact
             key={`${block.time}-${index}`}
             time={block.time}
+            date={date}
             text={block.text}
             images={block.images}
             htmlContent={block.htmlContent}

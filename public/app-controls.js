@@ -312,4 +312,29 @@
     initVideoControls();
     initVideoObserver();
   });
+
+  // 离开前记录当前页面
+  const readStack = () => {
+    try {
+      return JSON.parse(sessionStorage.getItem("lastPages") || "[]");
+    } catch {
+      return [];
+    }
+  };
+  const writeStack = arr => {
+    // 只保留最近 10 条
+    const pruned = arr.slice(-10);
+    sessionStorage.setItem("lastPages", JSON.stringify(pruned));
+  };
+  const currentBase = () => location.pathname + location.search;
+
+  // ------- 离开前记录 -------
+  document.addEventListener("astro:before-preparation", () => {
+    const stack = readStack();
+    const cur = currentBase();
+    if (stack[stack.length - 1] !== cur) {
+      stack.push(cur); // 去重：仅当与栈顶不同才写
+      writeStack(stack);
+    }
+  });
 })();

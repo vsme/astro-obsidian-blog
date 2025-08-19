@@ -40,14 +40,17 @@ const isActive = (path: string) => {
   >
     <div
       id="top-nav-wrap"
-      class="relative flex w-full items-center justify-between bg-background p-4 sm:h-14 sm:justify-start sm:bg-transparent sm:py-0"
+      class="relative flex w-full items-center justify-between bg-background p-4 sm:h-18 sm:justify-start sm:bg-transparent sm:py-0"
     >
       <!-- 左侧：网站标题 -->
       <a
         href="/"
         class="mr-8 py-1 text-xl leading-8 font-semibold whitespace-nowrap sm:my-auto sm:flex-shrink-0 sm:leading-none"
       >
-        {SITE.title}
+        <div class="relative -left-1.5 flex items-center">
+          <img src="/favicon.png" alt="favicon" class="h-10 w-10" />
+          <span class="ml-2">{SITE.title}</span>
+        </div>
       </a>
 
       <!-- 主导航菜单（桌面端） -->

@@ -38,6 +38,8 @@
     "lodash.kebabcase": "^4.1.1",
     "lucide-react": "^0.525.0",
     "motion": "^12.23.6",
+    "preact": "^10.27.1",
+    "preact-render-to-string": "^6.6.1",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "rehype-figure": "^1.0.1",

@@ -1,10 +1,77 @@
 import rss from "@astrojs/rss";
 import { getCollection } from "astro:content";
-import { getImage } from "astro:assets";
 import { getPath } from "@/utils/getPath";
 import getSortedPosts from "@/utils/getSortedPosts";
-import { generateOgImageForPost } from "@/utils/generateOgImages";
+import { optimizeImage } from "@/utils/optimizeImages";
 import { SITE } from "@/config";
+
+// 处理 html 内容中的图片引用，转换为实际图片URL
+// 支持 Astro图片格式: <img __ASTRO_IMAGE_="{&#x22;src&#x22;:&#x22;../attachment/blog/IMG_6128.jpg&#x22;,&#x22;alt&#x22;:&#x22;帅气的小伙子和他美丽的夫人&#x22;,&#x22;index&#x22;:0}">
+async function processHtmlImages(content: string): Promise<string> {
+  if (!content) return content;
+
+  let processedContent = content;
+
+  // 处理Astro图片标签格式
+  const astroImageRegex = /<img __ASTRO_IMAGE_="([^"]+)"[^>]*>/g;
+  let astroMatch;
+  while ((astroMatch = astroImageRegex.exec(content)) !== null) {
+    try {
+      // 解码HTML实体
+      const decodedData = astroMatch[1]
+        .replace(/&#x22;/g, '"')
+        .replace(/&quot;/g, '"')
+        .replace(/&amp;/g, "&")
+        .replace(/&lt;/g, "<")
+        .replace(/&gt;/g, ">");
+
+      // 解析JSON数据
+      const imageData = JSON.parse(decodedData);
+      const imagePath = imageData.src;
+      const altText = imageData.alt || "";
+
+      // 检查是否是相对路径的图片
+      if (imagePath && imagePath.includes("attachment")) {
+        // 使用optimizeImage函数优化图片
+        const optimizedImageInfo = await optimizeImage(imagePath, {
+          thumbnailSize: 900,
+        });
+
+        // 将优化后的图片路径转换为绝对URL
+        const optimizedImageUrl = new URL(
+          optimizedImageInfo.thumbnail,
+          SITE.website
+        ).href;
+
+        // 构建新的HTML img标签，包含尺寸信息
+        const newImgTag = `<img src="${optimizedImageUrl}" alt="${altText}" width="${optimizedImageInfo.width}" height="${optimizedImageInfo.height}">`;
+
+        // 替换原始的Astro图片标签
+        processedContent = processedContent.replace(astroMatch[0], newImgTag);
+      }
+    } catch (error) {
+      console.error("Error processing Astro image:", error);
+    }
+  }
+
+  // 去除所有的 style= 和 class=
+  processedContent = processedContent.replace(/ style="[^"]*"/g, "");
+  processedContent = processedContent.replace(/ class="[^"]*"/g, "");
+
+  // 去除标签间的空白字符
+  processedContent = processedContent.replace(/>\s+</g, "><");
+
+  // 去除 <h2 id="目录">目录<a href="#目录"><span aria-hidden="true">#</span></a></h2><div><ul> ... </ul></div> 目录
+  processedContent = processedContent.replace(
+    new RegExp(
+      '<h2 id="目录">目录<a href="#目录"><span aria-hidden="true">#</span></a></h2><div><ul>.*?</ul></div>',
+      "s"
+    ),
+    ""
+  );
+
+  return processedContent;
+}
 
 export async function GET() {
   const posts = await getCollection("blog");
@@ -14,75 +81,27 @@ export async function GET() {
   const rssItems = await Promise.all(
     sortedPosts.slice(0, 6).map(async post => {
       let thumbnailUrl = "";
-      let imageType = "image/webp";
-      let imageLength = 0;
-
-      // 检测图片类型的辅助函数
-      const getImageType = (url: string) => {
-        if (url.endsWith(".png")) return "image/png";
-        if (url.endsWith(".jpg") || url.endsWith(".jpeg")) return "image/jpeg";
-        if (url.endsWith(".webp")) return "image/webp";
-        return "image/webp"; // 默认webp
-      };
-
-      // 优先使用文章中的ogImage
-      if (post.data.ogImage) {
-        try {
-          if (typeof post.data.ogImage === "string") {
-            // 如果是字符串，检查是否为相对路径
-            if (post.data.ogImage.startsWith("http")) {
-              thumbnailUrl = post.data.ogImage;
-              imageType = getImageType(post.data.ogImage);
-            } else {
-              // 相对路径，转换为绝对URL
-              thumbnailUrl = new URL(post.data.ogImage, SITE.website).href;
-              imageType = getImageType(post.data.ogImage);
-            }
-          } else if (post.data.ogImage?.src) {
-            // 如果是图片对象，使用Astro压缩
-            const optimizedImage = await getImage({
-              src: post.data.ogImage,
-              width: 400,
-              height: 400,
-              format: "webp",
-              quality: 80,
-            });
-            thumbnailUrl = new URL(optimizedImage.src, SITE.website).href;
-            imageType = "image/webp";
-          }
-        } catch (error) {
-          console.warn(
-            `Failed to optimize image for post ${post.data.title}:`,
-            error
-          );
-          // 回退到原始图片
-          if (typeof post.data.ogImage === "string") {
-            thumbnailUrl = post.data.ogImage.startsWith("http")
-              ? post.data.ogImage
-              : new URL(post.data.ogImage, SITE.website).href;
-            imageType = getImageType(post.data.ogImage);
-          } else if (post.data.ogImage?.src) {
-            thumbnailUrl = new URL(post.data.ogImage.src, SITE.website).href;
-            imageType = getImageType(post.data.ogImage.src);
-          }
-        }
+      if (typeof post.data.ogImage === "string") {
+        const optimizedImageInfo = await optimizeImage(post.data.ogImage, {
+          thumbnailSize: 1200,
+        });
+        thumbnailUrl = new URL(optimizedImageInfo.thumbnail, SITE.website).href;
+      } else if (post.data.ogImage?.src) {
+        thumbnailUrl = new URL(post.data.ogImage.src, SITE.website).href;
       }
 
-      // 如果没有ogImage，则生成动态OG图片
-      if (!thumbnailUrl) {
-        const ogImageBuffer = await generateOgImageForPost(post);
-        thumbnailUrl = `data:image/png;base64,${ogImageBuffer.toString("base64")}`;
-        imageType = "image/png";
-        imageLength = ogImageBuffer.length;
-      }
+      // 处理文章内容中的图片 - 使用原始markdown内容
+      const processedContent = await processHtmlImages(
+        post.rendered?.html || ""
+      );
 
       return {
         link: getPath(post.id, post.filePath),
         title: post.data.title,
         description: post.data.description,
         pubDate: new Date(post.data.modDatetime ?? post.data.pubDatetime),
-        content: post.rendered?.html || "",
-        customData: `<enclosure url="${thumbnailUrl}" type="${imageType}" ${imageLength > 0 ? `length="${imageLength}"` : ""} />`,
+        content: processedContent,
+        customData: `<enclosure url="${thumbnailUrl}" type="image/webp" length="0" />`,
       };
     })
   );

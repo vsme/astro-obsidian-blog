@@ -50,8 +50,6 @@ const MediaCard: React.FC<MediaCardProps> = ({
   const posterUrl = poster_path || "";
   const mediaRating = rating ? Math.round(rating * 10) / 10 : 0;
 
-
-
   const formatRuntime = (minutes?: number) => {
     if (!minutes) return "";
     const hours = Math.floor(minutes / 60);
@@ -63,7 +61,7 @@ const MediaCard: React.FC<MediaCardProps> = ({
     if (!seconds) return "";
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
-    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
   };
 
   const formatReleaseDate = (dateStr?: string) => {
@@ -107,18 +105,19 @@ const MediaCard: React.FC<MediaCardProps> = ({
 
   return (
     <div
-      className={`media-card ${theme === "dark" ? "dark" : "light"} w-full max-w-3xl cursor-pointer rounded-lg transition-all duration-300 bg-muted/20 hover:bg-muted/30`}
+      className={`media-card ${theme === "dark" ? "dark" : "light"} w-full max-w-3xl cursor-pointer rounded-lg bg-muted/20 transition-all duration-300 hover:bg-muted/30`}
       onClick={handleCardClick}
     >
       <div className="flex flex-col gap-3 p-3 sm:flex-row">
         {/* 海报图片 - 左侧 */}
         {posterUrl && (
-          <div className="mx-auto w-24 flex-shrink-0 sm:mx-0 relative">
+          <div className="relative mx-auto w-24 flex-shrink-0 sm:mx-0">
             <img
               src={posterUrl}
               alt={title}
-              className={`w-full rounded-md object-cover shadow-sm ${cardType === "music" ? "aspect-square" : "aspect-[2/3]"
-                }`}
+              className={`w-full rounded-md object-cover shadow-sm ${
+                cardType === "music" ? "aspect-square" : "aspect-[2/3]"
+              }`}
             />
           </div>
         )}
@@ -129,12 +128,12 @@ const MediaCard: React.FC<MediaCardProps> = ({
           <div className="mb-3 flex flex-col sm:flex-row sm:items-start sm:justify-between">
             <div className="flex-1 text-center sm:text-left">
               <div className="mb-2">
-                <h3 className="leading-tight font-bold text-skin-accent text-lg sm:text-xl">
+                <h3 className="text-skin-accent text-lg leading-tight font-bold sm:text-xl">
                   {title}
                 </h3>
               </div>
 
-              <div className="mb-2 flex items-center justify-center gap-2 text-xs sm:mb-0 sm:justify-start sm:text-sm text-skin-base/60">
+              <div className="text-skin-base/60 mb-2 flex items-center justify-center gap-2 text-xs sm:mb-0 sm:justify-start sm:text-sm">
                 {cardType === "music" ? (
                   <>
                     {author && <span>{author}</span>}
@@ -146,7 +145,10 @@ const MediaCard: React.FC<MediaCardProps> = ({
                     {release_date && (
                       <>
                         <span>{formatReleaseDate(release_date)}</span>
-                        <span>{(cardType === 'book' ? author : region) && ` (${cardType === 'book' ? author : region})`}</span>
+                        <span>
+                          {(cardType === "book" ? author : region) &&
+                            ` (${cardType === "book" ? author : region})`}
+                        </span>
                       </>
                     )}
                     {runtime && <span>{`• ${formatRuntime(runtime)}`}</span>}
@@ -158,7 +160,7 @@ const MediaCard: React.FC<MediaCardProps> = ({
             {/* 类型徽标和评分 */}
             <div className="flex flex-col items-center gap-2 sm:mt-0 sm:items-end">
               {/* 评分 */}
-              {mediaRating > 0 && cardType !== 'music' && (
+              {mediaRating > 0 && cardType !== "music" && (
                 <div className="flex items-center gap-1">
                   <div className="flex items-center">
                     {Array.from({ length: 5 }, (_, star) => {
@@ -208,7 +210,7 @@ const MediaCard: React.FC<MediaCardProps> = ({
                       );
                     })}
                   </div>
-                  <span className="text-sm font-semibold text-skin-accent">
+                  <span className="text-skin-accent text-sm font-semibold">
                     {mediaRating.toFixed(1)}
                   </span>
                 </div>
@@ -230,7 +232,7 @@ const MediaCard: React.FC<MediaCardProps> = ({
           </div>
 
           {/* 简介 */}
-          {overview && cardType !== 'music' && (
+          {overview && cardType !== "music" && (
             <div className="mb-2">
               <p
                 className="text-skin-base/80 line-clamp-3 text-center text-xs leading-relaxed sm:line-clamp-2 sm:text-left sm:text-sm"

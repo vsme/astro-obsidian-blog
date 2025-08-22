@@ -1,5 +1,5 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { gsap } from 'gsap';
+import React, { useEffect, useRef, useState } from "react";
+import { gsap } from "gsap";
 
 interface Props {
   image: {
@@ -28,7 +28,10 @@ const DisintegrationImg: React.FC<Props> = ({ image }) => {
     originalImgParent: null as HTMLElement | null,
     originalImgNextSibling: null as ChildNode | null,
     isAnimating: false,
-    fragmentPool: [] as { canvas: HTMLCanvasElement; context: CanvasRenderingContext2D }[],
+    fragmentPool: [] as {
+      canvas: HTMLCanvasElement;
+      context: CanvasRenderingContext2D;
+    }[],
     cachedImageData: null as CachedImageDataType | null,
   });
 
@@ -37,10 +40,14 @@ const DisintegrationImg: React.FC<Props> = ({ image }) => {
     if (!img || animationState.current.cachedImageData) return;
 
     // 创建隐藏画布获取像素数据
-    const hidden = document.createElement('canvas');
+    const hidden = document.createElement("canvas");
     const W = (hidden.width = img.width);
-    const H = (hidden.height = Math.round((W / img.naturalWidth) * img.naturalHeight));
-    const hctx = hidden.getContext('2d', { alpha: false }) as CanvasRenderingContext2D; // 禁用alpha通道提升性能
+    const H = (hidden.height = Math.round(
+      (W / img.naturalWidth) * img.naturalHeight
+    ));
+    const hctx = hidden.getContext("2d", {
+      alpha: false,
+    }) as CanvasRenderingContext2D; // 禁用alpha通道提升性能
     hctx.drawImage(img, 0, 0, W, H);
 
     animationState.current.cachedImageData = {
@@ -55,11 +62,13 @@ const DisintegrationImg: React.FC<Props> = ({ image }) => {
     const { fragmentPool } = animationState.current;
     // 重用canvas元素池
     while (fragmentPool.length < count) {
-      const fragCanvas = document.createElement('canvas');
-      fragCanvas.className = 'fragment-canvas';
+      const fragCanvas = document.createElement("canvas");
+      fragCanvas.className = "fragment-canvas";
       fragmentPool.push({
         canvas: fragCanvas,
-        context: fragCanvas.getContext('2d', { alpha: true }) as CanvasRenderingContext2D,
+        context: fragCanvas.getContext("2d", {
+          alpha: true,
+        }) as CanvasRenderingContext2D,
       });
     }
     return fragmentPool.slice(0, count);
@@ -73,9 +82,13 @@ const DisintegrationImg: React.FC<Props> = ({ image }) => {
     animationState.current.isAnimating = true;
 
     // 隐藏原始图片
-    img.style.opacity = '0';
+    img.style.opacity = "0";
 
-    const { imageData, width: W, height: H } = animationState.current.cachedImageData!;
+    const {
+      imageData,
+      width: W,
+      height: H,
+    } = animationState.current.cachedImageData!;
     const COUNT = 40; // 减少片段数量提升性能
     const REPEAT_COUNT = 1; // 减少重复次数
 
@@ -99,7 +112,9 @@ const DisintegrationImg: React.FC<Props> = ({ image }) => {
       const pixelIndex = i * 4;
 
       for (let l = 0; l < REPEAT_COUNT; l++) {
-        const dataIndex = Math.floor((COUNT * (Math.random() + (2 * x) / W)) / 3);
+        const dataIndex = Math.floor(
+          (COUNT * (Math.random() + (2 * x) / W)) / 3
+        );
         if (dataIndex < COUNT && dataIndex >= 0) {
           const targetData = dataList[dataIndex].data;
           targetData[pixelIndex] = pixelData[pixelIndex]; // R
@@ -127,13 +142,13 @@ const DisintegrationImg: React.FC<Props> = ({ image }) => {
 
       // 批量设置样式
       Object.assign(fragCanvas.style, {
-        position: 'absolute',
-        left: '0px',
-        top: '0px',
-        borderRadius: 'var(--radius-md)',
-        width: (img.style.width || img.width) + 'px',
-        height: (img.style.height || img.height) + 'px',
-        zIndex: '5',
+        position: "absolute",
+        left: "0px",
+        top: "0px",
+        borderRadius: "var(--radius-md)",
+        width: (img.style.width || img.width) + "px",
+        height: (img.style.height || img.height) + "px",
+        zIndex: "5",
       });
 
       // 预计算随机值
@@ -166,7 +181,7 @@ const DisintegrationImg: React.FC<Props> = ({ image }) => {
           opacity: 1,
           scale: 1,
           duration: 0.8, // 减少动画时长
-          ease: 'back.out(1.7)',
+          ease: "back.out(1.7)",
           force3D: true,
         },
         delay
@@ -193,10 +208,10 @@ const DisintegrationImg: React.FC<Props> = ({ image }) => {
     // 在动画完成前1秒显示原始图片
     masterTimeline
       .to({}, { duration: 3 })
-      .to(img, { opacity: 1, duration: 1 }, '-=1')
+      .to(img, { opacity: 1, duration: 1 }, "-=1")
       .call(() => {
         // 确保添加loaded类，使用CSS过渡效果
-        img.classList.add('loaded');
+        img.classList.add("loaded");
         setIsLoaded(true);
         hasPlayedAnimationRef.current = true;
       });
@@ -209,7 +224,8 @@ const DisintegrationImg: React.FC<Props> = ({ image }) => {
 
     // 记录原始位置信息
     animationState.current.originalImgParent = img.parentNode as HTMLElement;
-    animationState.current.originalImgNextSibling = img.nextSibling as ChildNode;
+    animationState.current.originalImgNextSibling =
+      img.nextSibling as ChildNode;
 
     // 预处理图片数据
     preprocessImageData();
@@ -226,7 +242,7 @@ const DisintegrationImg: React.FC<Props> = ({ image }) => {
       // 如果已经播放过动画，直接显示图片
       const img = imgRef.current;
       if (img) {
-        img.classList.add('loaded');
+        img.classList.add("loaded");
         setIsLoaded(true);
       }
     }
@@ -240,11 +256,11 @@ const DisintegrationImg: React.FC<Props> = ({ image }) => {
     if (img.complete) {
       handleImageLoad();
     } else {
-      img.addEventListener('load', handleImageLoad);
+      img.addEventListener("load", handleImageLoad);
     }
 
     return () => {
-      img.removeEventListener('load', handleImageLoad);
+      img.removeEventListener("load", handleImageLoad);
     };
   }, [image.src]);
 
@@ -258,7 +274,7 @@ const DisintegrationImg: React.FC<Props> = ({ image }) => {
         ref={imgRef}
         src={image.src}
         crossOrigin="anonymous"
-        className={`disintegration-img ${isLoaded ? 'loaded' : ''}`}
+        className={`disintegration-img ${isLoaded ? "loaded" : ""}`}
         alt=""
       />
     </div>

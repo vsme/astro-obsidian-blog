@@ -183,7 +183,8 @@ const TimelineItemReact: React.FC<TimelineItemProps> = ({
             id={date ? `diary-${date}-${time.replace(/:/g, "-")}` : undefined}
             className="text-skin-base/60 m-0 flex-shrink-0 pr-2 pl-0 text-base font-medium"
           >
-            <span className="hidden">{date}</span>{` ${time}`}
+            <span className="hidden">{date}</span>
+            {` ${time}`}
           </h3>
           {/* 内容区域 */}
           <div className="min-w-0 flex-1">
@@ -199,16 +200,17 @@ const TimelineItemReact: React.FC<TimelineItemProps> = ({
               {isImagesLoaded && optimizedImages.length > 0 && (
                 <div className="images-grid mb-4" ref={galleryRef}>
                   <div
-                    className={`grid gap-3 ${htmlContent
-                      ? "w-full grid-cols-1"
-                      : optimizedImages.length === 1
-                        ? "max-w-80 grid-cols-1"
-                        : optimizedImages.length === 2
-                          ? "max-w-83 grid-cols-2"
-                          : optimizedImages.length === 4
+                    className={`grid gap-3 ${
+                      htmlContent
+                        ? "w-full grid-cols-1"
+                        : optimizedImages.length === 1
+                          ? "max-w-80 grid-cols-1"
+                          : optimizedImages.length === 2
                             ? "max-w-83 grid-cols-2"
-                            : "max-w-126 grid-cols-3"
-                      }`}
+                            : optimizedImages.length === 4
+                              ? "max-w-83 grid-cols-2"
+                              : "max-w-126 grid-cols-3"
+                    }`}
                   >
                     {optimizedImages.map((optimizedImg, index) => {
                       const originalImg = images![index];
@@ -216,17 +218,18 @@ const TimelineItemReact: React.FC<TimelineItemProps> = ({
                       return (
                         <a
                           key={index}
-                          className={`lg-item group block overflow-hidden rounded-xl ${optimizedImages.length === 1
-                            ? "relative"
-                            : "image-item relative aspect-square"
-                            }`}
+                          className={`lg-item group block overflow-hidden rounded-xl ${
+                            optimizedImages.length === 1
+                              ? "relative"
+                              : "image-item relative aspect-square"
+                          }`}
                           style={
                             optimizedImages.length === 1
                               ? {}
                               : ({
-                                aspectRatio: "1 / 1",
-                                WebkitAspectRatio: "1 / 1",
-                              } as React.CSSProperties)
+                                  aspectRatio: "1 / 1",
+                                  WebkitAspectRatio: "1 / 1",
+                                } as React.CSSProperties)
                           }
                           data-src={optimizedImg.original}
                           data-lg-size={`${optimizedImg.width}-${optimizedImg.height}`}
@@ -241,10 +244,10 @@ const TimelineItemReact: React.FC<TimelineItemProps> = ({
                               optimizedImages.length === 1
                                 ? {}
                                 : {
-                                  width: "100%",
-                                  height: "100%",
-                                  objectFit: "cover",
-                                }
+                                    width: "100%",
+                                    height: "100%",
+                                    objectFit: "cover",
+                                  }
                             }
                             loading="lazy"
                           />

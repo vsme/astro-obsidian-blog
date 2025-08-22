@@ -14,12 +14,13 @@ interface Options {
  * 简易版 remark wrap 插件
  * 根据 CSS 选择器匹配元素并包装在指定的容器中
  */
-export function remarkWrap (options: Options = {}) {
+export function remarkWrap(options: Options = {}) {
   const { className = "" } = options;
 
-  return function transformer (tree: Node) {
+  return function transformer(tree: Node) {
     // 处理 TOC 特殊情况 - 查找所有包含内部链接的列表并包裹第一个
-    const nodesToProcess: Array<{ node: Node; index: number; parent: Parent }> = [];
+    const nodesToProcess: Array<{ node: Node; index: number; parent: Parent }> =
+      [];
 
     // 首先收集所有符合条件的节点
     visit(tree, (node: Node, index?: number, parent?: Parent) => {
@@ -36,7 +37,8 @@ export function remarkWrap (options: Options = {}) {
 
           return listItem.children.some((grandChild: Node) => {
             const paragraph = grandChild as Parent;
-            if (grandChild.type !== "paragraph" || !paragraph.children) return false;
+            if (grandChild.type !== "paragraph" || !paragraph.children)
+              return false;
 
             return paragraph.children.some((link: Node) => {
               if (link.type !== "link") return false;
@@ -67,13 +69,7 @@ export function remarkWrap (options: Options = {}) {
       };
 
       // 替换目标节点为包装后的节点
-      parent.children.splice(
-        index,
-        1,
-        wrapperNode,
-        node,
-        closingNode
-      );
+      parent.children.splice(index, 1, wrapperNode, node, closingNode);
     }
   };
 }

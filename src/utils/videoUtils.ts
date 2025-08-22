@@ -1,8 +1,5 @@
 // 导入所有 MP4 视频文件
-const videos = import.meta.glob(
-  "../data/attachment/**/*.mp4",
-  { eager: true }
-);
+const videos = import.meta.glob("../data/attachment/**/*.mp4", { eager: true });
 
 /**
  * 获取视频路径
@@ -18,7 +15,8 @@ export function getVideoPath(videoPath: string): string {
   // 从视频路径中提取文件名
   let fileName = "";
   if (videoPath.includes("attachment")) {
-    fileName = videoPath.split("attachment/")[1] || videoPath.split("attachment\\")[1];
+    fileName =
+      videoPath.split("attachment/")[1] || videoPath.split("attachment\\")[1];
   }
 
   // 在导入的视频中查找匹配的视频
@@ -81,7 +79,7 @@ export interface VideoInfo {
  */
 export function getVideoInfo(videoPath: string): VideoInfo {
   const processedPath = getVideoPath(videoPath);
-  
+
   // 根据文件扩展名确定 MIME 类型
   let type = "video/mp4"; // 默认类型
   if (processedPath.endsWith(".webm")) {
@@ -96,6 +94,6 @@ export function getVideoInfo(videoPath: string): VideoInfo {
 
   return {
     src: processedPath,
-    type: type
+    type: type,
   };
 }

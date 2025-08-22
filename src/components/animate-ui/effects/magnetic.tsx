@@ -1,13 +1,13 @@
-'use client';
+"use client";
 
-import * as React from 'react';
+import * as React from "react";
 import {
   type HTMLMotionProps,
   motion,
   useMotionValue,
   useSpring,
   type SpringOptions,
-} from 'motion/react';
+} from "motion/react";
 
 type MagneticProps = {
   children: React.ReactElement;
@@ -16,7 +16,7 @@ type MagneticProps = {
   springOptions?: SpringOptions;
   onlyOnHover?: boolean;
   disableOnTouch?: boolean;
-} & HTMLMotionProps<'div'>;
+} & HTMLMotionProps<"div">;
 
 function Magnetic({
   ref,
@@ -36,8 +36,8 @@ function Magnetic({
   React.useImperativeHandle(ref, () => localRef.current as HTMLDivElement);
 
   const isTouchDevice = React.useMemo(() => {
-    if (typeof window === 'undefined') return false;
-    return window.matchMedia('(pointer:coarse)').matches;
+    if (typeof window === "undefined") return false;
+    return window.matchMedia("(pointer:coarse)").matches;
   }, []);
 
   const [active, setActive] = React.useState(!onlyOnHover);
@@ -67,31 +67,31 @@ function Magnetic({
         rawY.set(0);
       }
     },
-    [active, onlyOnHover, range, strength, rawX, rawY],
+    [active, onlyOnHover, range, strength, rawX, rawY]
   );
 
   React.useEffect(() => {
     if (disableOnTouch && isTouchDevice) return;
     const handle = (e: MouseEvent) => compute(e);
-    window.addEventListener('mousemove', handle);
-    return () => window.removeEventListener('mousemove', handle);
+    window.addEventListener("mousemove", handle);
+    return () => window.removeEventListener("mousemove", handle);
   }, [compute, disableOnTouch, isTouchDevice]);
 
   return (
     <motion.div
       ref={localRef}
-      style={{ display: 'inline-block', ...style, x, y }}
-      onMouseEnter={(e) => {
+      style={{ display: "inline-block", ...style, x, y }}
+      onMouseEnter={e => {
         if (onlyOnHover) setActive(true);
         onMouseEnter?.(e);
       }}
-      onMouseLeave={(e) => {
+      onMouseLeave={e => {
         if (onlyOnHover) setActive(false);
         rawX.set(0);
         rawY.set(0);
         onMouseLeave?.(e);
       }}
-      onMouseMove={(e) => {
+      onMouseMove={e => {
         if (onlyOnHover) compute(e);
         onMouseMove?.(e);
       }}

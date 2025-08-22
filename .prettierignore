@@ -12,3 +12,5 @@
 !.prettierrc
 !eslint.config.js
 !README.md
+
+/src/data

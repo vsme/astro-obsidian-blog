@@ -58,8 +58,39 @@ async function processHtmlImages(content: string): Promise<string> {
   processedContent = processedContent.replace(/ style="[^"]*"/g, "");
   processedContent = processedContent.replace(/ class="[^"]*"/g, "");
 
-  // 去除标签间的空白字符
-  processedContent = processedContent.replace(/>\s+</g, "><");
+  // 去除标签间的空白字符，但保留代码块内的换行
+  // 先临时替换代码块，避免处理其内容
+  const CODE_BLOCK_PREFIX = "__CODE_BLOCK_";
+  const CODE_BLOCK_SUFFIX = "__";
+  const codeBlockMap = new Map<string, string>();
+  let codeBlockIndex = 0;
+
+  // 提取并临时替换所有代码块
+  processedContent = processedContent.replace(
+    /<pre[^>]*>[\s\S]*?<\/pre>/g,
+    match => {
+      const placeholder = `${CODE_BLOCK_PREFIX}${codeBlockIndex}${CODE_BLOCK_SUFFIX}`;
+      codeBlockMap.set(placeholder, match);
+      codeBlockIndex++;
+      return placeholder;
+    }
+  );
+
+  // 在非代码块区域去除标签间的空白字符
+  processedContent = processedContent.replace(/\>\s+\</g, "><");
+
+  // 恢复代码块，并简化其中的span标签
+  codeBlockMap.forEach((block, placeholder) => {
+    try {
+      // 移除代码块中的所有span标签（开始和结束标签一次性处理）
+      const simplifiedBlock = block.replace(/<\/?span[^>]*>/g, "");
+      processedContent = processedContent.replace(placeholder, simplifiedBlock);
+    } catch (error) {
+      console.warn(`Failed to process code block: ${placeholder}`, error);
+      // 如果处理失败，恢复原始代码块
+      processedContent = processedContent.replace(placeholder, block);
+    }
+  });
 
   // 去除 <h2 id="目录">目录<a href="#目录"><span aria-hidden="true">#</span></a></h2><div><ul> ... </ul></div> 目录
   processedContent = processedContent.replace(

@@ -78,7 +78,11 @@ export async function optimizeImage<T extends boolean = false>(
   }
 
   // 在导入的图片中查找匹配的图片
-  const imageKey = Object.keys(images).find(key => key.includes(fileName));
+  const imageKey = Object.keys(images).find(
+    key => key === `../data/attachment/${fileName.replace(/\\/g, "/")}`
+  );
+
+  console.log("imageKey", imageKey);
 
   if (!imageKey) {
     return {

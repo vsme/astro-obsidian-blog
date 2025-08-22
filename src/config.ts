@@ -2,7 +2,7 @@ export const SITE = {
   website: "https://bgo.me/", // replace this with your deployed domain
   author: "Yawei Sun",
   profile: "https://bgo.me/",
-  desc: "这里有我散落的思绪与日常的温暖片段",
+  desc: "一个时间长河中的个人档案馆。",
   title: "B!GO",
   ogImage: "og.jpg",
   lightAndDarkMode: true,

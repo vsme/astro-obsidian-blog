@@ -15,6 +15,7 @@ export interface ImageOptimizeOptions {
   thumbnailSize?: number; // 缩略图最大尺寸，默认400
   keepOriginalSize?: boolean; // 是否保持原始尺寸，默认false
   quality?: number; // 图片质量，默认80
+  needFullSize?: boolean; // 是否需要原始尺寸图片，默认false
 }
 
 /**
@@ -22,10 +23,17 @@ export interface ImageOptimizeOptions {
  */
 export interface OptimizedImageInfo {
   thumbnail: string; // 缩略图路径
-  original: string; // 原始尺寸图片路径
+  original?: string; // 原始尺寸图片路径
   width: number; // 原始宽度
   height: number; // 原始高度
 }
+
+/**
+ * 条件图片信息接口
+ */
+export type ConditionalOptimizedImageInfo<T extends boolean> = T extends true
+  ? OptimizedImageInfo
+  : Omit<OptimizedImageInfo, "original">;
 
 /**
  * 优化图片并返回缩略图和原始图片信息
@@ -33,23 +41,24 @@ export interface OptimizedImageInfo {
  * @param options 优化选项
  * @returns 优化后的图片信息
  */
-export async function optimizeImage (
+export async function optimizeImage<T extends boolean = false>(
   imagePath: string,
-  options: ImageOptimizeOptions = {}
-): Promise<OptimizedImageInfo> {
+  options: ImageOptimizeOptions & { needFullSize?: T } = {}
+): Promise<ConditionalOptimizedImageInfo<T>> {
   const {
     thumbnailSize = 400,
     keepOriginalSize = false,
-    quality = 80
+    quality = 80,
+    needFullSize = false,
   } = options;
   // 如果 http 开头，尝试从 URL 中提取尺寸信息
   if (imagePath.startsWith("http")) {
     const result = {
       thumbnail: imagePath,
-      original: imagePath,
+      ...(needFullSize && { original: imagePath }),
       width: 800,
       height: 600,
-    };
+    } as ConditionalOptimizedImageInfo<T>;
     return result;
   }
 
@@ -74,10 +83,10 @@ export async function optimizeImage (
   if (!imageKey) {
     return {
       thumbnail: imagePath,
-      original: imagePath,
+      ...(needFullSize && { original: imagePath }),
       width: 400,
       height: 300,
-    };
+    } as ConditionalOptimizedImageInfo<T>;
   }
 
   try {
@@ -122,30 +131,32 @@ export async function optimizeImage (
     });
 
     // 生成原始尺寸的优化图片（用于放大展示）
-    const fullSizeImage = await getImage({
-      src: originalImage,
-      format: "webp",
-      quality: 90, // 更高质量用于放大展示
-    });
+    const fullSizeImage = needFullSize
+      ? await getImage({
+          src: originalImage,
+          format: "webp",
+          quality: 90, // 更高质量用于放大展示
+        })
+      : null;
 
     const result = {
       thumbnail: thumbnailImage.src,
-      original: fullSizeImage.src,
+      ...(needFullSize && { original: fullSizeImage!.src }),
       width: originalWidth,
       height: originalHeight,
-    };
+    } as ConditionalOptimizedImageInfo<T>;
 
     // 缓存结果
-    imageCache.set(cacheKey, result);
+    imageCache.set(cacheKey, result as OptimizedImageInfo);
 
     return result;
   } catch {
     return {
       thumbnail: imagePath,
-      original: imagePath,
+      ...(needFullSize && { original: imagePath }),
       width: 400,
       height: 300,
-    };
+    } as ConditionalOptimizedImageInfo<T>;
   }
 }
 
@@ -154,7 +165,7 @@ export async function optimizeImage (
  * @param imagePaths 图片路径数组
  * @returns 优化后的图片信息数组
  */
-export async function optimizeImages (
+export async function optimizeImages(
   imagePaths: string[]
 ): Promise<OptimizedImageInfo[]> {
   const promises = imagePaths.map(path => optimizeImage(path));
@@ -166,7 +177,7 @@ export async function optimizeImages (
  * @param imagePath 原始图片路径
  * @returns 缩略图路径
  */
-export async function optimizeImageThumbnail (
+export async function optimizeImageThumbnail(
   imagePath: string
 ): Promise<string> {
   const result = await optimizeImage(imagePath);
@@ -176,6 +187,6 @@ export async function optimizeImageThumbnail (
 /**
  * 清除图片缓存
  */
-export function clearImageCache (): void {
+export function clearImageCache(): void {
   imageCache.clear();
 }

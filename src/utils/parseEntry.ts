@@ -120,7 +120,7 @@ export async function parseEntry(entry: CollectionEntry<"diary">) {
         // 处理相对路径的图片
         try {
           // 使用完整的优化函数，获取包含尺寸信息的对象
-          const optimizedInfo = await optimizeImage(src);
+          const optimizedInfo = await optimizeImage(src, { needFullSize: true });
           images.push({
             alt: imgMatch[1],
             src: optimizedInfo.thumbnail,

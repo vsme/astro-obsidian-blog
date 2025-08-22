@@ -7,7 +7,7 @@ import { SITE } from "@/config";
 
 // 处理 html 内容中的图片引用，转换为实际图片URL
 // 支持 Astro图片格式: <img __ASTRO_IMAGE_="{&#x22;src&#x22;:&#x22;../attachment/blog/IMG_6128.jpg&#x22;,&#x22;alt&#x22;:&#x22;帅气的小伙子和他美丽的夫人&#x22;,&#x22;index&#x22;:0}">
-async function processHtmlImages(content: string): Promise<string> {
+async function processHtmlImages (content: string): Promise<string> {
   if (!content) return content;
 
   let processedContent = content;
@@ -54,9 +54,8 @@ async function processHtmlImages(content: string): Promise<string> {
     }
   }
 
-  // 去除所有的 style= 和 class=
+  // 在非代码块区域去除所有的 style=
   processedContent = processedContent.replace(/ style="[^"]*"/g, "");
-  processedContent = processedContent.replace(/ class="[^"]*"/g, "");
 
   // 去除标签间的空白字符，但保留代码块内的换行
   // 先临时替换代码块，避免处理其内容
@@ -76,6 +75,9 @@ async function processHtmlImages(content: string): Promise<string> {
     }
   );
 
+  // 在非代码块区域去除所有的 class=
+  processedContent = processedContent.replace(/ class="[^"]*"/g, "");
+
   // 在非代码块区域去除标签间的空白字符
   processedContent = processedContent.replace(/\>\s+\</g, "><");
 
@@ -83,7 +85,21 @@ async function processHtmlImages(content: string): Promise<string> {
   codeBlockMap.forEach((block, placeholder) => {
     try {
       // 移除代码块中的所有span标签（开始和结束标签一次性处理）
-      const simplifiedBlock = block.replace(/<\/?span[^>]*>/g, "");
+      let simplifiedBlock = block.replace(/<\/?span[^>]*>/g, "");
+
+      // 提取pre标签上的data-language属性，并将其移到code标签上
+      const preLanguageMatch = simplifiedBlock.match(/<pre[^>]*data-language="([^"]+)"[^>]*>/);
+      if (preLanguageMatch) {
+        const language = preLanguageMatch[1];
+        // 将pre标签替换为简单的<pre>标签，移除所有属性
+        simplifiedBlock = simplifiedBlock.replace(/<pre[^>]*>/, "<pre>");
+        // 在code标签上添加class="language-{language}"
+        simplifiedBlock = simplifiedBlock.replace(/<code>/, `<code class="language-${language}">`);
+      } else {
+        // 如果没有语言属性，也要清理pre标签的所有属性
+        simplifiedBlock = simplifiedBlock.replace(/<pre[^>]*>/, "<pre>");
+      }
+
       processedContent = processedContent.replace(placeholder, simplifiedBlock);
     } catch (error) {
       console.warn(`Failed to process code block: ${placeholder}`, error);
@@ -101,10 +117,16 @@ async function processHtmlImages(content: string): Promise<string> {
     ""
   );
 
+  // 去除所有标题标签内部的hash链接
+  processedContent = processedContent.replace(
+    /<(h[1-6])([^>]*)>([\s\S]*?)<a href="#[^"]*"[^>]*>[\s\S]*?<\/a><\/\1>/g,
+    '<$1$2>$3</$1>'
+  );
+
   return processedContent;
 }
 
-export async function GET() {
+export async function GET () {
   const posts = await getCollection("blog");
   const sortedPosts = getSortedPosts(posts);
 

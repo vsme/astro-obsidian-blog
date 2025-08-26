@@ -271,7 +271,6 @@ const TimelineItemReact: React.FC<TimelineItemProps> = ({
                   <MediaCard
                     mediaData={{
                       ...movieData,
-                      poster_path: movieData.poster,
                     }}
                   />
                 </div>
@@ -282,7 +281,6 @@ const TimelineItemReact: React.FC<TimelineItemProps> = ({
                   <MediaCard
                     mediaData={{
                       ...tvData,
-                      poster_path: tvData.poster,
                     }}
                     cardType="tv"
                   />
@@ -294,7 +292,6 @@ const TimelineItemReact: React.FC<TimelineItemProps> = ({
                   <MediaCard
                     mediaData={{
                       ...bookData,
-                      poster_path: bookData.poster,
                     }}
                     cardType="book"
                   />
@@ -306,7 +303,6 @@ const TimelineItemReact: React.FC<TimelineItemProps> = ({
                   <MediaCard
                     mediaData={{
                       ...musicData,
-                      poster_path: musicData.poster,
                     }}
                     cardType="music"
                   />

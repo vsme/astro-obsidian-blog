@@ -9,7 +9,7 @@ export interface MediaData {
   runtime?: number;
   genres?: string;
   overview?: string;
-  poster_path?: string;
+  poster?: string;
   author?: string;
   album?: string;
   duration?: number;
@@ -38,7 +38,7 @@ const MediaCard: React.FC<MediaCardProps> = ({
     runtime,
     genres,
     overview,
-    poster_path,
+    poster,
     author,
     album,
     duration,
@@ -47,7 +47,7 @@ const MediaCard: React.FC<MediaCardProps> = ({
     external_url,
   } = mediaData;
 
-  const posterUrl = poster_path || "";
+  const posterUrl = poster || "";
   const mediaRating = rating ? Math.round(rating * 10) / 10 : 0;
 
   const formatRuntime = (minutes?: number) => {

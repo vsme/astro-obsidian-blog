@@ -1,0 +1,26 @@
+---
+import MediaCardComponent from "./MediaCard.tsx";
+import type { MediaCardProps } from "../types/media";
+import { optimizeImage } from "@/utils/optimizeImages";
+
+let {
+  mediaData,
+  theme = "light",
+  cardType = "movie",
+} = Astro.props as MediaCardProps;
+
+if (typeof mediaData === "string") {
+  mediaData = JSON.parse(mediaData);
+}
+
+if (mediaData.poster) {
+  mediaData.poster = await (await optimizeImage(mediaData.poster)).thumbnail;
+}
+---
+
+<MediaCardComponent
+  mediaData={mediaData}
+  theme={theme}
+  cardType={cardType}
+  client:load
+/>

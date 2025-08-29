@@ -96,9 +96,8 @@ const MediaCard: React.FC<MediaCardProps> = ({
             <img
               src={posterUrl}
               alt={title}
-              className={`my-0 w-full rounded-md object-cover shadow-sm ${
-                cardType === "music" ? "aspect-square" : "aspect-[2/3]"
-              }`}
+              className={`my-0 w-full rounded-md object-cover shadow-sm ${cardType === "music" ? "aspect-square" : "aspect-[2/3]"
+                }`}
             />
           </div>
         )}

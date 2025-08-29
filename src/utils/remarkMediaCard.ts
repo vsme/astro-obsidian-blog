@@ -1,24 +1,16 @@
 import { visit } from "unist-util-visit";
 import type { Root, Code } from "mdast";
 import type { Node } from "unist";
+import type { MdxJsxFlowElement } from "mdast-util-mdx-jsx";
 import type {
   MediaCardData,
   MediaCardOptions,
   MediaCardType,
 } from "../types/media";
-import { renderToString } from "react-dom/server";
-import MediaCard from "../components/MediaCard";
-import React from "react";
 
 // 定义基本的Node类型
 interface Parent extends Node {
   children: Node[];
-}
-
-// HTML 节点接口
-interface HtmlNode extends Node {
-  type: "html";
-  value: string;
 }
 
 /**
@@ -55,24 +47,6 @@ function parseCardContent(content: string): MediaCardData | null {
 
   // 先转换为 unknown 类型，再转换为 MediaCardData 类型，以确保类型安全
   return data as unknown as MediaCardData;
-}
-
-/**
- * 创建媒体卡片 HTML
- */
-function createMediaCardHtml(
-  cardType: MediaCardType,
-  mediaData: MediaCardData
-): string {
-  // 使用 renderToString 将 React 组件渲染为 HTML 字符串
-  const htmlString = renderToString(
-    React.createElement(MediaCard, {
-      mediaData,
-      cardType,
-    })
-  );
-
-  return `${htmlString}`;
 }
 
 /**
@@ -134,19 +108,33 @@ export function remarkMediaCard(options: MediaCardOptions = {}) {
       const { index, parent, cardType, mediaData } = nodesToProcess[i];
 
       try {
-        // 创建 HTML 节点
-        const htmlNode: HtmlNode = {
-          type: "html",
-          value: createMediaCardHtml(cardType, mediaData),
+        // 创建 MDX JSX 节点
+        const jsxNode: MdxJsxFlowElement = {
+          type: "mdxJsxFlowElement",
+          name: "MediaCard",
+          attributes: [
+            {
+              type: "mdxJsxAttribute",
+              name: "cardType",
+              value: cardType,
+            },
+            {
+              type: "mdxJsxAttribute",
+              name: "mediaData",
+              value: JSON.stringify(mediaData),
+            },
+          ],
+          children: [],
         };
 
         // 替换原始代码块节点
-        parent.children[index] = htmlNode;
+        parent.children[index] = jsxNode;
 
         if (enableDebug) {
           console.log(
-            `Replaced ${cardType} card with HTML node:`,
-            mediaData.title
+            `Replaced ${cardType} card with JSX node:`,
+            mediaData.title,
+            jsxNode
           );
         }
       } catch (error) {

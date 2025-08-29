@@ -3,8 +3,6 @@ import { type CollectionEntry, getCollection } from "astro:content";
 import PostDetails from "@/layouts/PostDetails.astro";
 import getSortedPosts from "@/utils/getSortedPosts";
 import { getPath } from "@/utils/getPath";
-import { optimizeImage } from "@/utils/optimizeImages";
-import * as cheerio from "cheerio";
 
 export interface Props {
   post: CollectionEntry<"blog">;
@@ -21,47 +19,6 @@ export async function getStaticPaths() {
 }
 
 const { post } = Astro.props;
-
-// 查找 media-card 里面的 img url 和 preload link 修改并替换链接
-if (post.rendered?.html) {
-  const $ = cheerio.load(post.rendered.html);
-  const tasks: Promise<void>[] = [];
-  const imgUrls: Set<string> = new Set();
-
-  // 收集所有需要优化的图片URL
-  $(".media-card img[src]").each((_, el) => {
-    const src = $(el).attr("src");
-    if (src) imgUrls.add(src);
-  });
-
-  // 为每个唯一的图片URL创建优化任务
-  for (const srcUrl of imgUrls) {
-    tasks.push(
-      (async () => {
-        try {
-          const thumb = (await optimizeImage(srcUrl)).thumbnail;
-          // 替换img标签的src
-          $(".media-card img[src='" + srcUrl + "']").attr("src", thumb);
-
-          // 收集preload link中的图片URL
-          $('link[rel="preload"][as="image"][href]').each((_, el) => {
-            const href = $(el).attr("href");
-            if (href && href.includes(srcUrl)) {
-              $(el).attr("href", thumb);
-            }
-          });
-        } catch (e) {
-          console.warn("图片优化失败，保持原始路径:", srcUrl, e);
-        }
-      })()
-    );
-  }
-
-  await Promise.all(tasks);
-  post.rendered.html = $.html();
-}
-
-// console.log("post", post);
 
 const posts = await getCollection("blog");
 const sortedPosts = getSortedPosts(posts);

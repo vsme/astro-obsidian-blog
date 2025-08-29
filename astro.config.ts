@@ -30,7 +30,7 @@ export default defineConfig({
     format: "directory",
   },
   integrations: [
-    mdx(),
+    mdx({ extendMarkdownConfig: true }),
     sitemap({
       filter: page => SITE.showArchives || !page.endsWith("/archives"),
     }),

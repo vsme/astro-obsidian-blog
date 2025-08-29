@@ -104,7 +104,7 @@ export default defineConfig({
       exclude: ["@resvg/resvg-js"],
     },
     esbuild: {
-      // drop: ["console", "debugger"],
+      drop: ["console", "debugger"],
     },
   },
   image: {

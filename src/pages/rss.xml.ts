@@ -4,21 +4,52 @@ import { getPath } from "@/utils/getPath";
 import getSortedPosts from "@/utils/getSortedPosts";
 import { optimizeImage } from "@/utils/optimizeImages";
 import { SITE } from "@/config";
+import * as cheerio from "cheerio";
 
 // 处理 html 内容中的图片引用，转换为实际图片URL
 // 支持 Astro图片格式: <img __ASTRO_IMAGE_="{&#x22;src&#x22;:&#x22;../attachment/blog/IMG_6128.jpg&#x22;,&#x22;alt&#x22;:&#x22;帅气的小伙子和他美丽的夫人&#x22;,&#x22;index&#x22;:0}">
 async function processHtmlImages(content: string): Promise<string> {
   if (!content) return content;
 
-  let processedContent = content;
+  const $ = cheerio.load(content);
+
+  // 去除目录部分
+  const tocHeading = $("#目录");
+  const nextDiv = tocHeading.next("div.article-toc-nav");
+  nextDiv.remove();
+  tocHeading.remove();
+
+  // 删除所有 link 标签
+  $("link").remove();
+
+  const typeMap: Record<string, string> = {
+    BOOK: "查看书籍",
+    MOVIE: "查看电影",
+    TV: "查看剧集",
+    MUSIC: "去听歌曲",
+  };
+
+  // 把文章中的卡片 .media-card 只保留 a 链接
+  $("a.media-card").each((_, mediaCard) => {
+    const $link = $(mediaCard);
+    const h3 = $link.find("h3").text();
+    const type = $link.attr("data-media-type")?.toUpperCase();
+    const label = type ? typeMap[type] : "";
+    const linkHtml = label ? `${label}：《${h3}》` : `《${h3}》`;
+    $link.html(linkHtml);
+    $link.wrap("<p></p>");
+  });
 
   // 处理Astro图片标签格式
-  const astroImageRegex = /<img __ASTRO_IMAGE_="([^"]+)"[^>]*>/g;
-  let astroMatch;
-  while ((astroMatch = astroImageRegex.exec(content)) !== null) {
+  const astroImages = $("img[__astro_image_]");
+  for (let i = 0; i < astroImages.length; i++) {
+    const img = $(astroImages[i]);
     try {
+      const astroImageData = img.attr("__astro_image_");
+      if (!astroImageData) continue;
+
       // 解码HTML实体
-      const decodedData = astroMatch[1]
+      const decodedData = astroImageData
         .replace(/&#x22;/g, '"')
         .replace(/&quot;/g, '"')
         .replace(/&amp;/g, "&")
@@ -43,92 +74,72 @@ async function processHtmlImages(content: string): Promise<string> {
           SITE.website
         ).href;
 
-        // 构建新的HTML img标签，包含尺寸信息
-        const newImgTag = `<img src="${optimizedImageUrl}" alt="${altText}" width="${optimizedImageInfo.width}" height="${optimizedImageInfo.height}">`;
-
-        // 替换原始的Astro图片标签
-        processedContent = processedContent.replace(astroMatch[0], newImgTag);
+        // 更新img标签属性
+        img.attr("src", optimizedImageUrl);
+        img.attr("alt", altText);
+        img.attr("width", optimizedImageInfo.width.toString());
+        img.attr("height", optimizedImageInfo.height.toString());
+        img.removeAttr("__astro_image_");
       }
     } catch (error) {
       console.error("Error processing Astro image:", error);
     }
   }
 
-  // 在非代码块区域去除所有的 style=
-  processedContent = processedContent.replace(/ style="[^"]*"/g, "");
+  // 在非代码块区域去除所有的 style 属性
+  $("*:not(pre *):not(code *)").removeAttr("style");
 
-  // 去除标签间的空白字符，但保留代码块内的换行
-  // 先临时替换代码块，避免处理其内容
-  const CODE_BLOCK_PREFIX = "__CODE_BLOCK_";
-  const CODE_BLOCK_SUFFIX = "__";
-  const codeBlockMap = new Map<string, string>();
-  let codeBlockIndex = 0;
+  // 在非代码块区域去除所有的 class 属性
+  $("*:not(pre *):not(code *)").removeAttr("class");
 
-  // 提取并临时替换所有代码块
-  processedContent = processedContent.replace(
-    /<pre[^>]*>[\s\S]*?<\/pre>/g,
-    match => {
-      const placeholder = `${CODE_BLOCK_PREFIX}${codeBlockIndex}${CODE_BLOCK_SUFFIX}`;
-      codeBlockMap.set(placeholder, match);
-      codeBlockIndex++;
-      return placeholder;
-    }
-  );
-
-  // 在非代码块区域去除所有的 class=
-  processedContent = processedContent.replace(/ class="[^"]*"/g, "");
-
-  // 在非代码块区域去除标签间的空白字符
-  processedContent = processedContent.replace(/\>\s+\</g, "><");
-
-  // 恢复代码块，并简化其中的span标签
-  codeBlockMap.forEach((block, placeholder) => {
+  // 处理代码块，简化其中的span标签
+  $("pre").each((_, preElement) => {
+    const $pre = $(preElement);
     try {
-      // 移除代码块中的所有span标签（开始和结束标签一次性处理）
-      let simplifiedBlock = block.replace(/<\/?span[^>]*>/g, "");
+      // 提取pre标签上的data-language属性
+      const language = $pre.attr("data-language");
 
-      // 提取pre标签上的data-language属性，并将其移到code标签上
-      const preLanguageMatch = simplifiedBlock.match(
-        /<pre[^>]*data-language="([^"]+)"[^>]*>/
-      );
-      if (preLanguageMatch) {
-        const language = preLanguageMatch[1];
-        // 将pre标签替换为简单的<pre>标签，移除所有属性
-        simplifiedBlock = simplifiedBlock.replace(/<pre[^>]*>/, "<pre>");
-        // 在code标签上添加class="language-{language}"
-        simplifiedBlock = simplifiedBlock.replace(
-          /<code>/,
-          `<code class="language-${language}">`
-        );
-      } else {
-        // 如果没有语言属性，也要清理pre标签的所有属性
-        simplifiedBlock = simplifiedBlock.replace(/<pre[^>]*>/, "<pre>");
+      // 移除pre标签的属性tabindex、data-language、class
+      ["tabindex", "data-language", "class"].forEach(attr => {
+        $pre.removeAttr(attr);
+      });
+
+      // 移除代码块中的所有span标签
+      $pre.find("span").each((_, span) => {
+        const $span = $(span);
+        $span.replaceWith($span.text());
+      });
+      // 如果有语言属性，添加到code标签上
+      if (language) {
+        const $code = $pre.find("code");
+        $code.attr("class", `language-${language}`);
       }
-
-      processedContent = processedContent.replace(placeholder, simplifiedBlock);
     } catch (error) {
-      console.warn(`Failed to process code block: ${placeholder}`, error);
-      // 如果处理失败，恢复原始代码块
-      processedContent = processedContent.replace(placeholder, block);
+      console.warn("Failed to process code block:", error);
     }
   });
 
-  // 去除 <h2 id="目录">目录<a href="#目录"><span aria-hidden="true">#</span></a></h2><div><ul> ... </ul></div> 目录
-  processedContent = processedContent.replace(
-    new RegExp(
-      '<h2 id="目录">目录<a href="#目录"><span aria-hidden="true">#</span></a></h2><div><ul>.*?</ul></div>',
-      "s"
-    ),
-    ""
-  );
-
   // 去除所有标题标签内部的hash链接
-  processedContent = processedContent.replace(
-    /<(h[1-6])([^>]*)>([\s\S]*?)<a href="#[^"]*"[^>]*>[\s\S]*?<\/a><\/\1>/g,
-    "<$1$2>$3</$1>"
-  );
+  $("h1, h2, h3, h4, h5, h6").each((_, heading) => {
+    const $heading = $(heading);
+    $heading.find('a[href^="#"]').remove();
+  });
 
-  return processedContent;
+  $("*")
+    .contents()
+    .each((_, content) => {
+      if (content.type !== "text") return;
+      // 祖先检查
+      if ($(content).parents("pre,code,script,style,textarea").length) return;
+
+      const s = content.data ?? "";
+      // 只处理纯空白
+      if (/^[ \t\r\n\f]+$/.test(s)) {
+        $(content).remove();
+      }
+    });
+
+  return $.html();
 }
 
 export async function GET() {

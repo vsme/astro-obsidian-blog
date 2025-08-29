@@ -5,10 +5,36 @@ import getSortedPosts from "@/utils/getSortedPosts";
 import { optimizeImage } from "@/utils/optimizeImages";
 import { SITE } from "@/config";
 import * as cheerio from "cheerio";
+import { unified } from "unified";
+import remarkParse from "remark-parse";
+import remarkRehype from "remark-rehype";
+import rehypeStringify from "rehype-stringify";
+import remarkWrap from "../../src/utils/remarkWrap";
+import { remarkMediaCard } from "../../src/utils/remarkMediaCard";
+import remarkToc from "remark-toc";
+import rehypeFigure from "rehype-figure";
+import rehypeSlug from "rehype-slug";
+
+const renderMarkdown = async (markdown: string) => {
+  const processed = await unified()
+    .use(remarkMediaCard)
+    .use(remarkParse)
+    .use(remarkRehype)
+    .use(remarkWrap)
+    .use(remarkToc)
+    .use(rehypeSlug)
+    .use(rehypeFigure)
+    .use(rehypeStringify)
+    .process(markdown);
+  return processed.toString();
+};
 
 // 处理 html 内容中的图片引用，转换为实际图片URL
 // 支持 Astro图片格式: <img __ASTRO_IMAGE_="{&#x22;src&#x22;:&#x22;../attachment/blog/IMG_6128.jpg&#x22;,&#x22;alt&#x22;:&#x22;帅气的小伙子和他美丽的夫人&#x22;,&#x22;index&#x22;:0}">
-async function processHtmlImages(content: string): Promise<string> {
+async function processHtmlImages(
+  content: string,
+  isMDX = false
+): Promise<string> {
   if (!content) return content;
 
   const $ = cheerio.load(content);
@@ -41,25 +67,36 @@ async function processHtmlImages(content: string): Promise<string> {
   });
 
   // 处理Astro图片标签格式
-  const astroImages = $("img[__astro_image_]");
+  const astroImages = isMDX
+    ? $("*:not(code img[src])")
+    : $("img[__astro_image_]");
   for (let i = 0; i < astroImages.length; i++) {
     const img = $(astroImages[i]);
     try {
-      const astroImageData = img.attr("__astro_image_");
+      const astroImageData = isMDX
+        ? img.attr("src")
+        : img.attr("__astro_image_");
       if (!astroImageData) continue;
 
-      // 解码HTML实体
-      const decodedData = astroImageData
-        .replace(/&#x22;/g, '"')
-        .replace(/&quot;/g, '"')
-        .replace(/&amp;/g, "&")
-        .replace(/&lt;/g, "<")
-        .replace(/&gt;/g, ">");
+      let imagePath = "";
+      let altText = "";
 
-      // 解析JSON数据
-      const imageData = JSON.parse(decodedData);
-      const imagePath = imageData.src;
-      const altText = imageData.alt || "";
+      if (!isMDX) {
+        const decodedData = astroImageData
+          .replace(/&#x22;/g, '"')
+          .replace(/&quot;/g, '"')
+          .replace(/&amp;/g, "&")
+          .replace(/&lt;/g, "<")
+          .replace(/&gt;/g, ">");
+
+        // 解析JSON数据
+        const imageData = JSON.parse(decodedData);
+        imagePath = imageData.src;
+        altText = imageData.alt;
+      } else {
+        imagePath = astroImageData;
+        altText = img.attr("alt") || "";
+      }
 
       // 检查是否是相对路径的图片
       if (imagePath && imagePath.includes("attachment")) {
@@ -160,9 +197,13 @@ export async function GET() {
       }
 
       // 处理文章内容中的图片 - 使用原始markdown内容
-      const processedContent = await processHtmlImages(
-        post.rendered?.html || ""
-      );
+      let processedContent = await processHtmlImages(post.rendered?.html || "");
+
+      if (!post.rendered?.html) {
+        const md = post.body || "";
+        const html = await renderMarkdown(md);
+        processedContent = await processHtmlImages(html, true);
+      }
 
       return {
         link: getPath(post.id, post.filePath),

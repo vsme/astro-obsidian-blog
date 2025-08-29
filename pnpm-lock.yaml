@@ -177,6 +177,15 @@ importers:
       prettier-plugin-tailwindcss:
         specifier: ^0.6.13
         version: 0.6.13(prettier-plugin-astro@0.14.1)(prettier@3.6.2)
+      rehype-stringify:
+        specifier: ^10.0.1
+        version: 10.0.1
+      remark-parse:
+        specifier: ^11.0.0
+        version: 11.0.0
+      remark-rehype:
+        specifier: ^11.1.2
+        version: 11.1.2
       tw-animate-css:
         specifier: ^1.3.5
         version: 1.3.5
@@ -186,6 +195,9 @@ importers:
       typescript-eslint:
         specifier: ^8.36.0
         version: 8.36.0(eslint@9.30.1(jiti@2.4.2))(typescript@5.8.3)
+      unified:
+        specifier: ^11.0.5
+        version: 11.0.5
 
 packages:
 

@@ -1,66 +1,10 @@
 import React, { useEffect, useRef, useState } from "react";
 import MediaCard from "./MediaCard";
+import type { MediaCardData } from "../types/media";
 
 // 导入 lightgallery 样式
 import "lightgallery/css/lightgallery.css";
 import "lightgallery/css/lg-zoom.css";
-
-// 本地电影数据接口
-interface LocalMovieData {
-  id?: number;
-  title: string;
-  release_date?: string;
-  region?: string;
-  rating?: number;
-  runtime?: number;
-  genres?: string;
-  overview?: string;
-  poster?: string;
-  source?: string;
-  external_url?: string;
-}
-
-// 本地TV数据接口
-interface LocalTVData {
-  id?: string;
-  title: string;
-  release_date?: string;
-  region?: string;
-  rating?: number;
-  genres?: string;
-  overview?: string;
-  poster?: string;
-  source?: string;
-  external_url?: string;
-}
-
-// 本地书籍数据接口
-interface LocalBookData {
-  id?: string;
-  title: string;
-  release_date?: string;
-  region?: string;
-  rating?: number;
-  genres?: string;
-  overview?: string;
-  poster?: string;
-  external_url?: string;
-}
-
-// 本地音乐数据接口
-interface LocalMusicData {
-  id?: string;
-  title: string;
-  author?: string;
-  album?: string;
-  release_date?: string;
-  rating?: number;
-  duration?: number;
-  genres?: string;
-  overview?: string;
-  poster?: string;
-  url?: string;
-}
 
 export interface TimelineItemProps {
   time: string;
@@ -75,10 +19,10 @@ export interface TimelineItemProps {
     height?: number;
   }>;
   htmlContent?: string;
-  movieData?: LocalMovieData;
-  tvData?: LocalTVData;
-  bookData?: LocalBookData;
-  musicData?: LocalMusicData;
+  movieData?: MediaCardData;
+  tvData?: MediaCardData;
+  bookData?: MediaCardData;
+  musicData?: MediaCardData;
 }
 
 const TimelineItemReact: React.FC<TimelineItemProps> = ({
@@ -268,48 +212,25 @@ const TimelineItemReact: React.FC<TimelineItemProps> = ({
 
               {movieData && (
                 <div className="movie-card-container mb-4">
-                  <MediaCard
-                    mediaData={{
-                      ...movieData,
-                      poster_path: movieData.poster,
-                    }}
-                  />
+                  <MediaCard mediaData={movieData} cardType="movie" />
                 </div>
               )}
 
               {tvData && (
                 <div className="tv-card-container mb-4">
-                  <MediaCard
-                    mediaData={{
-                      ...tvData,
-                      poster_path: tvData.poster,
-                    }}
-                    cardType="tv"
-                  />
+                  <MediaCard mediaData={tvData} cardType="tv" />
                 </div>
               )}
 
               {bookData && (
                 <div className="book-card-container mb-4">
-                  <MediaCard
-                    mediaData={{
-                      ...bookData,
-                      poster_path: bookData.poster,
-                    }}
-                    cardType="book"
-                  />
+                  <MediaCard mediaData={bookData} cardType="book" />
                 </div>
               )}
 
               {musicData && (
                 <div className="music-card-container mb-4">
-                  <MediaCard
-                    mediaData={{
-                      ...musicData,
-                      poster_path: musicData.poster,
-                    }}
-                    cardType="music"
-                  />
+                  <MediaCard mediaData={musicData} cardType="music" />
                 </div>
               )}
             </div>

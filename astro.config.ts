@@ -18,6 +18,7 @@ import { SITE } from "./src/config";
 import react from "@astrojs/react";
 import remarkWrap from "./src/utils/remarkWrap";
 import rehypeHeadingLinks from "./src/utils/rehypeHeadingLinks";
+import { remarkMediaCard } from "./src/utils/remarkMediaCard";
 import pagefind from "astro-pagefind";
 
 import compress from "astro-compress";
@@ -59,6 +60,7 @@ export default defineConfig({
   ],
   markdown: {
     remarkPlugins: [
+      [remarkMediaCard, { enableDebug: false }],
       [remarkToc, { heading: "目录" }],
       remarkMark,
       [remarkWrap, { className: "article-toc-nav" }],
@@ -102,7 +104,7 @@ export default defineConfig({
       exclude: ["@resvg/resvg-js"],
     },
     esbuild: {
-      drop: ["console", "debugger"],
+      // drop: ["console", "debugger"],
     },
   },
   image: {

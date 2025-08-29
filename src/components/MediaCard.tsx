@@ -1,28 +1,5 @@
 import React from "react";
-
-export interface MediaData {
-  id?: number | string;
-  title: string;
-  release_date?: string;
-  region?: string;
-  rating?: number;
-  runtime?: number;
-  genres?: string;
-  overview?: string;
-  poster_path?: string;
-  author?: string;
-  album?: string;
-  duration?: number;
-  url?: string;
-  source?: string;
-  external_url?: string;
-}
-
-export interface MediaCardProps {
-  mediaData: MediaData;
-  theme?: "light" | "dark";
-  cardType?: "movie" | "tv" | "book" | "music";
-}
+import type { MediaCardProps } from "../types/media";
 
 const MediaCard: React.FC<MediaCardProps> = ({
   mediaData,
@@ -38,7 +15,7 @@ const MediaCard: React.FC<MediaCardProps> = ({
     runtime,
     genres,
     overview,
-    poster_path,
+    poster,
     author,
     album,
     duration,
@@ -47,7 +24,7 @@ const MediaCard: React.FC<MediaCardProps> = ({
     external_url,
   } = mediaData;
 
-  const posterUrl = poster_path || "";
+  const posterUrl = poster || "";
   const mediaRating = rating ? Math.round(rating * 10) / 10 : 0;
 
   const formatRuntime = (minutes?: number) => {
@@ -74,12 +51,12 @@ const MediaCard: React.FC<MediaCardProps> = ({
     });
   };
 
-  const handleCardClick = () => {
+  const getCardUrl = () => {
     if (cardType === "music" && url) {
-      window.open(url, "_blank");
+      return url;
     } else if (external_url) {
       // 如果有external_url，优先使用
-      window.open(external_url, "_blank");
+      return external_url;
     } else if (id) {
       let baseUrl;
       if (cardType === "tv") {
@@ -99,14 +76,17 @@ const MediaCard: React.FC<MediaCardProps> = ({
           baseUrl = "https://www.themoviedb.org/movie/";
         }
       }
-      window.open(`${baseUrl}${id}`, "_blank");
+      return `${baseUrl}${id}`;
     }
+    return "#";
   };
 
   return (
-    <div
-      className={`media-card ${theme === "dark" ? "dark" : "light"} w-full max-w-3xl cursor-pointer rounded-lg bg-muted/20 transition-all duration-300 hover:bg-muted/30`}
-      onClick={handleCardClick}
+    <a
+      href={getCardUrl()}
+      target="_blank"
+      rel="noopener noreferrer"
+      className={`media-card ${theme === "dark" ? "dark" : "light"} block w-full max-w-3xl cursor-pointer rounded-lg bg-muted/20 no-underline transition-all duration-300 hover:bg-muted/30`}
     >
       <div className="flex flex-col gap-3 p-3 sm:flex-row">
         {/* 海报图片 - 左侧 */}
@@ -115,7 +95,7 @@ const MediaCard: React.FC<MediaCardProps> = ({
             <img
               src={posterUrl}
               alt={title}
-              className={`w-full rounded-md object-cover shadow-sm ${
+              className={`my-0 w-full rounded-md object-cover shadow-sm ${
                 cardType === "music" ? "aspect-square" : "aspect-[2/3]"
               }`}
             />
@@ -128,7 +108,7 @@ const MediaCard: React.FC<MediaCardProps> = ({
           <div className="mb-3 flex flex-col sm:flex-row sm:items-start sm:justify-between">
             <div className="flex-1 text-center sm:text-left">
               <div className="mb-2">
-                <h3 className="text-skin-accent text-lg leading-tight font-bold sm:text-xl">
+                <h3 className="text-skin-accent mt-0 text-lg leading-tight font-bold sm:text-xl">
                   {title}
                 </h3>
               </div>
@@ -235,7 +215,7 @@ const MediaCard: React.FC<MediaCardProps> = ({
           {overview && cardType !== "music" && (
             <div className="mb-2">
               <p
-                className="text-skin-base/80 line-clamp-3 text-center text-xs leading-relaxed sm:line-clamp-2 sm:text-left sm:text-sm"
+                className="text-skin-base/80 mb-0 line-clamp-3 text-center text-xs leading-relaxed sm:line-clamp-2 sm:text-left sm:text-sm"
                 style={{
                   display: "-webkit-box",
                   WebkitBoxOrient: "vertical",
@@ -248,7 +228,7 @@ const MediaCard: React.FC<MediaCardProps> = ({
           )}
         </div>
       </div>
-    </div>
+    </a>
   );
 };
 

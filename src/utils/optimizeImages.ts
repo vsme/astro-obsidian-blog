@@ -70,17 +70,34 @@ export async function optimizeImage<T extends boolean = false>(
     return imageCache.get(cacheKey)!;
   }
 
-  // 从图片路径中提取文件名
+  // 从图片路径中提取文件名，只处理 attachment/ 目录后的部分
+  const normalizedImagePath = imagePath.replace(/\\/g, "/");
   let fileName = "";
-  if (imagePath.includes("attachment")) {
-    fileName =
-      imagePath.split("attachment/")[1] || imagePath.split("attachment\\")[1];
+  if (normalizedImagePath.includes("attachment")) {
+    // 提取 attachment/ 后面的部分
+    const afterAttachment = normalizedImagePath.split("attachment/")[1];
+    if (afterAttachment) {
+      fileName = afterAttachment;
+    } else {
+      fileName = normalizedImagePath.split("/").pop() || normalizedImagePath;
+    }
+  } else {
+    fileName = normalizedImagePath.split("/").pop() || normalizedImagePath;
   }
 
-  // 在导入的图片中查找匹配的图片
-  const imageKey = Object.keys(images).find(
-    key => key === `../data/attachment/${fileName.replace(/\\/g, "/")}`
-  );
+  // 在导入的图片中查找匹配的图片，只匹配 attachment/ 目录后的部分
+  const imageKey = Object.keys(images).find(key => {
+    const normalizedKey = key.replace(/\\/g, "/");
+    let keyAfterAttachment = "";
+    if (normalizedKey.includes("attachment/")) {
+      keyAfterAttachment = normalizedKey.split("attachment/")[1] || "";
+    } else {
+      keyAfterAttachment = normalizedKey;
+    }
+
+    // 比较 attachment/ 后的路径部分（忽略大小写）
+    return keyAfterAttachment.toLowerCase() === fileName.toLowerCase();
+  });
 
   console.log("imageKey", imageKey);
 

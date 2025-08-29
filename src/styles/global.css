@@ -320,3 +320,7 @@ video {
     display: none !important;
   }
 }
+
+.media-card {
+  @apply mb-5;
+}

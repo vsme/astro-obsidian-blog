@@ -10,14 +10,14 @@ import remarkParse from "remark-parse";
 import remarkRehype from "remark-rehype";
 import rehypeStringify from "rehype-stringify";
 import remarkWrap from "../../src/utils/remarkWrap";
-import { remarkMediaCard } from "../../src/utils/remarkMediaCard";
+import { remarkRssMediaCard } from "../../src/utils/remarkRssMediaCard";
 import remarkToc from "remark-toc";
 import rehypeFigure from "rehype-figure";
 import rehypeSlug from "rehype-slug";
 
 const renderMarkdown = async (markdown: string) => {
   const processed = await unified()
-    .use(remarkMediaCard)
+    .use(remarkRssMediaCard)
     .use(remarkParse)
     .use(remarkRehype)
     .use(remarkWrap)
@@ -47,24 +47,6 @@ async function processHtmlImages(
 
   // 删除所有 link 标签
   $("link").remove();
-
-  const typeMap: Record<string, string> = {
-    BOOK: "查看书籍",
-    MOVIE: "查看电影",
-    TV: "查看剧集",
-    MUSIC: "去听歌曲",
-  };
-
-  // 把文章中的卡片 .media-card 只保留 a 链接
-  $("a.media-card").each((_, mediaCard) => {
-    const $link = $(mediaCard);
-    const h3 = $link.find("h3").text();
-    const type = $link.attr("data-media-type")?.toUpperCase();
-    const label = type ? typeMap[type] : "";
-    const linkHtml = label ? `${label}：《${h3}》` : `《${h3}》`;
-    $link.html(linkHtml);
-    $link.wrap("<p></p>");
-  });
 
   // 处理Astro图片标签格式
   const astroImages = isMDX

@@ -49,9 +49,7 @@ async function processHtmlImages(
   $("link").remove();
 
   // 处理Astro图片标签格式
-  const astroImages = isMDX
-    ? $("*:not(code img[src])")
-    : $("img[__astro_image_]");
+  const astroImages = isMDX ? $("img[src]") : $("img[__astro_image_]");
   for (let i = 0; i < astroImages.length; i++) {
     const img = $(astroImages[i]);
     try {
@@ -124,10 +122,11 @@ async function processHtmlImages(
       });
 
       // 移除代码块中的所有span标签
-      $pre.find("span").each((_, span) => {
-        const $span = $(span);
-        $span.replaceWith($span.text());
+      $pre.find("span").each((_, el) => {
+        const node = $(el).contents();
+        $(el).replaceWith(node);
       });
+
       // 如果有语言属性，添加到code标签上
       if (language) {
         const $code = $pre.find("code");
@@ -179,9 +178,10 @@ export async function GET() {
       }
 
       // 处理文章内容中的图片 - 使用原始markdown内容
-      let processedContent = await processHtmlImages(post.rendered?.html || "");
-
-      if (!post.rendered?.html) {
+      let processedContent = "";
+      if (post.rendered?.html) {
+        processedContent = await processHtmlImages(post.rendered?.html || "");
+      } else {
         const md = post.body || "";
         const html = await renderMarkdown(md);
         processedContent = await processHtmlImages(html, true);

@@ -22,7 +22,7 @@
 ```
 /
 ├── public/
-│   ├── favicon.svg
+│   ├── favicon.png
 │   └── toggle-theme.js
 ├── src/
 │   ├── assets/          # 静态资源

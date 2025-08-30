@@ -14,7 +14,7 @@ if (typeof mediaData === "string") {
 }
 
 if (mediaData.poster) {
-  mediaData.poster = await (await optimizeImage(mediaData.poster)).thumbnail;
+  mediaData.poster = (await optimizeImage(mediaData.poster)).thumbnail;
 }
 ---
 

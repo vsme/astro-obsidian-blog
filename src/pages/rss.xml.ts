@@ -203,5 +203,10 @@ export async function GET() {
     description: SITE.desc,
     site: SITE.website,
     items: rssItems,
+    customData: `<image>
+      <url>${new URL("favicon.png", SITE.website).href}</url>
+      <title>${SITE.title}</title>
+      <link>${SITE.website}</link>
+    </image>`,
   });
 }

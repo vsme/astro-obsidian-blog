@@ -124,32 +124,77 @@ const DiaryTimeline: React.FC<DiaryTimelineProps> = ({
     };
   }, [loadMore]);
 
+  // 更新父容器的 aria-busy 状态
+  useEffect(() => {
+    const feedElement = document.getElementById("diary-content");
+    if (feedElement) {
+      feedElement.setAttribute("aria-busy", isLoading.toString());
+    }
+  }, [isLoading]);
+
   return (
     <>
       {displayedEntries.map((entry, index) => (
-        <DiaryEntryReact
+        <article
           key={`${entry.date}-${index}`}
-          date={entry.date}
-          hideYear={hideYear}
-          timeBlocks={entry.timeBlocks}
-        />
+          role="article"
+          aria-labelledby={`date-${entry.date}`}
+          aria-describedby={`content-${entry.date}`}
+          tabIndex={0}
+          className="focus:ring-skin-accent focus:ring-offset-skin-fill rounded-lg focus:ring-2 focus:ring-offset-2 focus:outline-none"
+        >
+          <DiaryEntryReact
+            date={entry.date}
+            hideYear={hideYear}
+            timeBlocks={entry.timeBlocks}
+          />
+        </article>
       ))}
 
       {displayedEntries.length === 0 && (
-        <div className="py-12 text-center">
+        <div className="py-12 text-center" role="status" aria-live="polite">
           <p className="text-skin-base opacity-60">还没有任何日记...</p>
         </div>
       )}
 
       {isLoading && (
-        <div className="loading py-8 text-center">
+        <div
+          className="loading py-8 text-center"
+          role="status"
+          aria-live="assertive"
+          aria-label="正在加载更多日记条目"
+        >
           <p className="text-skin-base opacity-60">加载中...</p>
+          <div className="sr-only">正在为您加载更多日记内容，请稍候</div>
         </div>
       )}
 
       {!hasMore && displayedEntries.length > 0 && (
-        <div className="no-more py-8 text-center">
+        <div
+          className="no-more py-8 text-center"
+          role="status"
+          aria-live="polite"
+        >
           <p className="text-skin-base opacity-60">没有更多内容了</p>
+          <div className="sr-only">
+            已显示全部 {displayedEntries.length} 条日记记录
+          </div>
+        </div>
+      )}
+
+      {/* 手动加载更多按钮，为键盘用户提供替代方案 */}
+      {hasMore && !isLoading && (
+        <div className="py-8 text-center">
+          <button
+            onClick={loadMore}
+            className="bg-skin-accent text-skin-inverted hover:bg-skin-accent/90 focus:ring-skin-accent focus:ring-offset-skin-fill rounded-lg px-6 py-3 transition-colors focus:ring-2 focus:ring-offset-2 focus:outline-none"
+            aria-describedby="load-more-description"
+          >
+            加载更多日记
+          </button>
+          <div id="load-more-description" className="sr-only">
+            点击此按钮加载更多日记条目，或继续向下滚动自动加载
+          </div>
         </div>
       )}
     </>

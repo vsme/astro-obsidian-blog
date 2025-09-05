@@ -39,15 +39,49 @@ const paginationInfo = {
 <Layout title={`时间档案 | ${SITE.title}`}>
   <Header />
 
-  <main id="main-content" data-pagefind-ignore>
+  <main
+    id="main-content"
+    data-pagefind-ignore
+    role="main"
+    aria-label="时间档案主要内容"
+  >
+    <!-- 跳转到主要内容的链接 -->
+    <a
+      href="#diary-content"
+      class="focus:bg-skin-accent focus:text-skin-inverted sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-50 focus:rounded focus:px-4 focus:py-2 focus:no-underline"
+    >
+      跳转到主要内容
+    </a>
+
     <section
       id="diary"
       class="from-skin-fill via-skin-card to-skin-fill mx-auto min-h-screen max-w-app bg-gradient-to-br px-4 pt-4"
+      role="region"
+      aria-labelledby="diary-heading"
     >
       <div class="min-h-screen">
+        <!-- 页面标题 -->
+        <header class="py-0">
+          <h1 id="diary-heading" class="sr-only">时间档案</h1>
+          <p class="sr-only">
+            按时间顺序展示的日记条目，支持无限滚动加载更多内容
+          </p>
+        </header>
+
         <!-- 主要内容区域 -->
         <div class="py-8">
-          <div id="diary-content">
+          <div
+            id="diary-content"
+            role="feed"
+            aria-label="日记时间线"
+            aria-describedby="diary-description"
+            aria-live="polite"
+            aria-busy="false"
+          >
+            <div id="diary-description" class="sr-only">
+              日记条目按时间倒序排列，每页显示 {ITEMS_PER_PAGE} 条记录，当前共有
+              {sortedEntries.length} 条记录
+            </div>
             <DiaryTimeline
               client:load
               initialEntries={initialParsedEntries}

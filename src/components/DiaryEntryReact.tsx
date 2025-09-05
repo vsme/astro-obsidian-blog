@@ -139,16 +139,20 @@ const DiaryEntryReact: React.FC<DiaryEntryProps> = ({
 
   return (
     <div className="date-group mb-16" data-pagefind-weight="2">
-      <div className="mb-8">
+      <header className="mb-8">
         <div className="flex items-baseline gap-3">
-          <div className="text-skin-accent text-3xl leading-none font-bold">
+          <h2
+            id={`date-${date}`}
+            className="text-skin-accent m-0 text-3xl leading-none font-bold"
+            aria-label={`${relativeLabel ?? absoluteLabel} ${weekdayLabel} ${!hideYear ? yearLabel : ""} 的日记`}
+          >
             {/* SSR 时渲染 absoluteLabel；CSR 完成后若有相对文案则替换。
                suppressHydrationWarning 防止首帧文本差异触发水合警告 */}
             <span suppressHydrationWarning>
               {relativeLabel ?? absoluteLabel}
             </span>
-          </div>
-          <div className="flex flex-col">
+          </h2>
+          <div className="flex flex-col" aria-hidden="true">
             <div className="text-skin-base text-base leading-tight font-medium">
               {weekdayLabel}
             </div>
@@ -159,9 +163,17 @@ const DiaryEntryReact: React.FC<DiaryEntryProps> = ({
             )}
           </div>
         </div>
-      </div>
+        <div className="sr-only">
+          {date} 共有 {timeBlocks.length} 个时间段的记录
+        </div>
+      </header>
 
-      <div className="space-y-0">
+      <div
+        id={`content-${date}`}
+        className="space-y-0"
+        role="group"
+        aria-labelledby={`date-${date}`}
+      >
         {timeBlocks.map((block, index) => (
           <TimelineItemReact
             key={`${block.time}-${index}`}

@@ -118,7 +118,7 @@ const TimelineItemReact: React.FC<TimelineItemProps> = ({
     };
   }, [isImagesLoaded, optimizedImages]);
   return (
-    <div className="diary-item mb-6 border-b border-dashed border-border/30 pb-6 last:border-b-0 last:pb-0">
+    <article className="diary-item mb-6 border-b border-dashed border-border/30 pb-6 last:border-b-0 last:pb-0">
       <div className="content group transition-all duration-300">
         {/* 时间和内容整合显示 */}
         <div className="flex items-start gap-3">
@@ -126,9 +126,10 @@ const TimelineItemReact: React.FC<TimelineItemProps> = ({
           <h3
             id={date ? `diary-${date}-${time.replace(/:/g, "-")}` : undefined}
             className="text-skin-base/60 m-0 flex-shrink-0 pr-2 pl-0 text-base font-medium"
+            aria-label={`${time} 时间段的记录`}
           >
-            <span className="hidden">{date}</span>
-            {` ${time}`}
+            <span className="sr-only">{date}</span>
+            <time dateTime={date ? `${date}T${time}` : time}>{time}</time>
           </h3>
           {/* 内容区域 */}
           <div className="min-w-0 flex-1">
@@ -142,7 +143,12 @@ const TimelineItemReact: React.FC<TimelineItemProps> = ({
               )}
 
               {isImagesLoaded && optimizedImages.length > 0 && (
-                <div className="images-grid mb-4" ref={galleryRef}>
+                <figure
+                  className="images-grid mb-4"
+                  ref={galleryRef}
+                  role="group"
+                  aria-label={`图片集合，共 ${optimizedImages.length} 张图片`}
+                >
                   <div
                     className={`grid gap-3 ${
                       htmlContent
@@ -162,7 +168,7 @@ const TimelineItemReact: React.FC<TimelineItemProps> = ({
                       return (
                         <a
                           key={index}
-                          className={`lg-item group block overflow-hidden rounded-xl ${
+                          className={`lg-item group focus:ring-skin-accent block overflow-hidden rounded-xl focus:ring-2 focus:ring-offset-2 focus:outline-none ${
                             optimizedImages.length === 1
                               ? "relative"
                               : "image-item relative aspect-square"
@@ -179,10 +185,19 @@ const TimelineItemReact: React.FC<TimelineItemProps> = ({
                           data-lg-size={`${optimizedImg.width}-${optimizedImg.height}`}
                           data-sub-html={`<h4>${originalImg.alt}</h4><p>${originalImg.title || `${originalImg.width}x${optimizedImg.height}`}</p>`}
                           href={optimizedImg.original}
+                          aria-label={`查看大图：${originalImg.alt}${originalImg.title ? ` - ${originalImg.title}` : ""}`}
+                          role="button"
+                          tabIndex={0}
+                          onKeyDown={e => {
+                            if (e.key === "Enter" || e.key === " ") {
+                              e.preventDefault();
+                              e.currentTarget.click();
+                            }
+                          }}
                         >
                           <img
                             src={optimizedImg.thumbnail}
-                            alt={originalImg.alt}
+                            alt={originalImg.alt || `图片 ${index + 1}`}
                             className="h-full w-full cursor-pointer object-cover transition-transform duration-300 hover:scale-105"
                             style={
                               optimizedImages.length === 1
@@ -194,12 +209,19 @@ const TimelineItemReact: React.FC<TimelineItemProps> = ({
                                   }
                             }
                             loading="lazy"
+                            title={originalImg.title}
                           />
                         </a>
                       );
                     })}
                   </div>
-                </div>
+                  {optimizedImages.length > 1 && (
+                    <figcaption className="sr-only">
+                      图片集合包含 {optimizedImages.length}{" "}
+                      张图片，点击任意图片可查看大图
+                    </figcaption>
+                  )}
+                </figure>
               )}
 
               {htmlContent && (
@@ -207,37 +229,51 @@ const TimelineItemReact: React.FC<TimelineItemProps> = ({
                   className="html-content mt-0 mb-4 max-w-none leading-[0]"
                   dangerouslySetInnerHTML={{ __html: htmlContent }}
                   suppressHydrationWarning={true}
+                  role="region"
+                  aria-label="富文本内容"
                 />
               )}
 
               {movieData && (
-                <div className="movie-card-container mb-4">
+                <section
+                  className="movie-card-container mb-4 px-0"
+                  aria-label="电影信息"
+                >
                   <MediaCard mediaData={movieData} cardType="movie" />
-                </div>
+                </section>
               )}
 
               {tvData && (
-                <div className="tv-card-container mb-4">
+                <section
+                  className="tv-card-container mb-4 px-0"
+                  aria-label="电视剧信息"
+                >
                   <MediaCard mediaData={tvData} cardType="tv" />
-                </div>
+                </section>
               )}
 
               {bookData && (
-                <div className="book-card-container mb-4">
+                <section
+                  className="book-card-container mb-4 px-0"
+                  aria-label="书籍信息"
+                >
                   <MediaCard mediaData={bookData} cardType="book" />
-                </div>
+                </section>
               )}
 
               {musicData && (
-                <div className="music-card-container mb-4">
+                <section
+                  className="music-card-container mb-4 px-0"
+                  aria-label="音乐信息"
+                >
                   <MediaCard mediaData={musicData} cardType="music" />
-                </div>
+                </section>
               )}
             </div>
           </div>
         </div>
       </div>
-    </div>
+    </article>
   );
 };
 

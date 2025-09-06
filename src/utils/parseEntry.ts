@@ -105,6 +105,32 @@ export async function parseEntry(entry: CollectionEntry<"diary">) {
       '<a href="$2" target="_blank" rel="noopener noreferrer" class="text-skin-accent font-semibold underline decoration-2 underline-offset-2 hover:decoration-4 hover:text-skin-accent-2 transition-all duration-200">$1</a>'
     );
 
+    // 解析 Markdown 无序列表为 HTML ul/li
+    text = text.replace(
+      /((?:^- .+(?:\n|$))+)/gm,
+      (match) => {
+        const items = match
+          .split('\n')
+          .filter(line => line.trim().startsWith('- '))
+          .map(line => `<li class="ml-4 list-disc">${line.substring(2).trim()}</li>`)
+          .join('');
+        return `<ul class="mt-1 mb-2 pl-2">${items}</ul>`;
+      }
+    );
+
+    // 解析 Markdown 有序列表为 HTML ol/li
+    text = text.replace(
+      /((?:^\d+\. .+(?:\n|$))+)/gm,
+      (match) => {
+        const items = match
+          .split('\n')
+          .filter(line => /^\d+\. /.test(line.trim()))
+          .map(line => `<li class="ml-4 list-decimal">${line.replace(/^\d+\. /, '').trim()}</li>`)
+          .join('');
+        return `<ol class="mt-1 mb-2 pl-2">${items}</ol>`;
+      }
+    );
+
     // 提取图片并优化
     const images = [];
     const imgMatches = blockContent.match(/```imgs([\s\S]*?)```/);

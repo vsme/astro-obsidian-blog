@@ -141,7 +141,7 @@ const DiaryTimeline: React.FC<DiaryTimelineProps> = ({
           aria-labelledby={`date-${entry.date}`}
           aria-describedby={`content-${entry.date}`}
           tabIndex={0}
-          className="focus:ring-skin-accent focus:ring-offset-skin-fill rounded-lg focus:ring-2 focus:ring-offset-2 focus:outline-none"
+          className="focus:ring-skin-accent focus:ring-offset-skin-fill rounded-lg focus:outline-none"
         >
           <DiaryEntryReact
             date={entry.date}
@@ -187,7 +187,7 @@ const DiaryTimeline: React.FC<DiaryTimelineProps> = ({
         <div className="py-8 text-center">
           <button
             onClick={loadMore}
-            className="bg-skin-accent text-skin-inverted hover:bg-skin-accent/90 focus:ring-skin-accent focus:ring-offset-skin-fill rounded-lg px-6 py-3 transition-colors focus:ring-2 focus:ring-offset-2 focus:outline-none"
+            className="bg-skin-accent text-skin-inverted hover:bg-skin-accent/90 focus:ring-skin-accent focus:ring-offset-skin-fill rounded-lg px-6 py-3 transition-colors focus:outline-none"
             aria-describedby="load-more-description"
           >
             加载更多日记

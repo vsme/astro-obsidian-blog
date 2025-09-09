@@ -152,39 +152,40 @@ const DiaryTimeline: React.FC<DiaryTimelineProps> = ({
       ))}
 
       {displayedEntries.length === 0 && (
-        <div className="py-12 text-center" role="status" aria-live="polite">
-          <p className="text-skin-base opacity-60">还没有任何日记...</p>
-        </div>
+        <article role="article" className="py-12 text-center">
+          <div role="status" aria-live="polite">
+            <p className="text-skin-base opacity-60">还没有任何日记...</p>
+          </div>
+        </article>
       )}
 
       {isLoading && (
-        <div
-          className="loading py-8 text-center"
-          role="status"
-          aria-live="assertive"
-          aria-label="正在加载更多日记条目"
-        >
-          <p className="text-skin-base opacity-60">加载中...</p>
-          <div className="sr-only">正在为您加载更多日记内容，请稍候</div>
-        </div>
+        <article role="article" className="loading py-8 text-center">
+          <div
+            role="status"
+            aria-live="assertive"
+            aria-label="正在加载更多日记条目"
+          >
+            <p className="text-skin-base opacity-60">加载中...</p>
+            <div className="sr-only">正在为您加载更多日记内容，请稍候</div>
+          </div>
+        </article>
       )}
 
       {!hasMore && displayedEntries.length > 0 && (
-        <div
-          className="no-more py-8 text-center"
-          role="status"
-          aria-live="polite"
-        >
-          <p className="text-skin-base opacity-60">没有更多内容了</p>
-          <div className="sr-only">
-            已显示全部 {displayedEntries.length} 条日记记录
+        <article role="article" className="no-more py-8 text-center">
+          <div role="status" aria-live="polite">
+            <p className="text-skin-base opacity-60">没有更多内容了</p>
+            <div className="sr-only">
+              已显示全部 {displayedEntries.length} 条日记记录
+            </div>
           </div>
-        </div>
+        </article>
       )}
 
       {/* 手动加载更多按钮，为键盘用户提供替代方案 */}
       {hasMore && !isLoading && (
-        <div className="py-8 text-center">
+        <article role="article" className="py-8 text-center">
           <button
             onClick={loadMore}
             className="bg-skin-accent text-skin-inverted hover:bg-skin-accent/90 focus:ring-skin-accent focus:ring-offset-skin-fill rounded-lg px-6 py-3 transition-colors focus:outline-none"
@@ -195,7 +196,7 @@ const DiaryTimeline: React.FC<DiaryTimelineProps> = ({
           <div id="load-more-description" className="sr-only">
             点击此按钮加载更多日记条目，或继续向下滚动自动加载
           </div>
-        </div>
+        </article>
       )}
     </>
   );

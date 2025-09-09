@@ -10,9 +10,12 @@ import DiaryTimeline from "@/components/DiaryTimeline.tsx";
 
 const diaryEntries = await getCollection("diary");
 
+// 过滤掉草稿状态的条目
+const publishedEntries = diaryEntries.filter(entry => !entry.data.draft);
+
 // 按文件名（日期）排序，最新的在前
 // 同时确保同一天内的时间块也按时间倒序排列
-const sortedEntries = diaryEntries.sort((a, b) => {
+const sortedEntries = publishedEntries.sort((a, b) => {
   const dateA = a.id.replace(".md", "");
   const dateB = b.id.replace(".md", "");
   return dateB.localeCompare(dateA);

@@ -28,6 +28,7 @@ const diary = defineCollection({
   loader: glob({ pattern: "**/[^_]*.{md,mdx}", base: `./${DIARY_PATH}` }),
   schema: z.object({
     tags: z.array(z.string()).default(["Diary"]),
+    draft: z.boolean().optional(),
   }),
 });
 

@@ -73,6 +73,10 @@ const paginationInfo = {
 
         <!-- 主要内容区域 -->
         <div class="py-8">
+          <div id="diary-description" class="sr-only">
+            日记条目按时间倒序排列，每页显示 {ITEMS_PER_PAGE} 条记录，当前共有
+            {sortedEntries.length} 条记录
+          </div>
           <div
             id="diary-content"
             role="feed"
@@ -81,10 +85,6 @@ const paginationInfo = {
             aria-live="polite"
             aria-busy="false"
           >
-            <div id="diary-description" class="sr-only">
-              日记条目按时间倒序排列，每页显示 {ITEMS_PER_PAGE} 条记录，当前共有
-              {sortedEntries.length} 条记录
-            </div>
             <DiaryTimeline
               client:load
               initialEntries={initialParsedEntries}

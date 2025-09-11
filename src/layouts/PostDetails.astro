@@ -34,6 +34,9 @@ const {
   timezone,
   tags,
   hideEditPost,
+  summary,
+  // keywords,
+  // mainPoints,
 } = post.data;
 
 const { Content } = await render(post);
@@ -112,6 +115,43 @@ const nextPost =
       >
       <EditPost {hideEditPost} {post} class="max-sm:hidden" />
     </div>
+
+    {
+      summary && (
+        <div class="mt-6 mb-8 rounded-lg border border-purple-500/20 bg-gradient-to-br from-purple-400/8 via-purple-500/3 to-purple-600/3 p-4 font-sans shadow-[inset_0_2px_6px_rgba(0,0,0,0.05)] selection:bg-purple-800/40 dark:selection:bg-purple-200/50">
+          <div class="mb-3 flex items-center gap-2">
+            <svg class="h-5 w-5" fill="url(#starGradient)" viewBox="0 0 24 24">
+              <defs>
+                <linearGradient
+                  id="starGradient"
+                  x1="0%"
+                  y1="0%"
+                  x2="100%"
+                  y2="100%"
+                >
+                  <stop offset="0%" style="stop-color:#e0abff" />
+                  <stop offset="100%" style="stop-color:#7a43d8" />
+                </linearGradient>
+              </defs>
+              <path d="M12 2L9.1 9.1 2 12l7.1 2.9L12 22l2.9-7.1L22 12l-7.1-2.9z" />
+              <path
+                fill="url(#starGradient)"
+                transform="translate(16, 0) scale(0.4)"
+                d="M12 2L9.1 9.1 2 12l7.1 2.9L12 22l2.9-7.1L22 12l-7.1-2.9z"
+              />
+            </svg>
+            <h3 class="bg-gradient-to-r from-purple-400 to-purple-600 bg-clip-text text-lg font-bold text-transparent">
+              AI 总结
+            </h3>
+          </div>
+
+          {summary && (
+            <p class="text-sm leading-relaxed text-foreground/80">{summary}</p>
+          )}
+        </div>
+      )
+    }
+
     <article
       id="article"
       class="app-prose relative mx-auto mt-8 max-w-app prose-pre:bg-(--shiki-light-bg) dark:prose-pre:bg-(--shiki-dark-bg)"

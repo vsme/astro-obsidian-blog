@@ -47,6 +47,12 @@ html[data-theme="dark"] {
     scrollbar-width: auto;
     scrollbar-color: var(--color-muted) transparent;
   }
+
+  html,
+  body {
+    @apply m-0 min-h-dvh w-full;
+  }
+
   html {
     @apply overflow-y-scroll scroll-smooth leading-7;
   }

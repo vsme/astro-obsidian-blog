@@ -119,7 +119,7 @@ const TimelineItemReact: React.FC<TimelineItemProps> = ({
   }, [isImagesLoaded, optimizedImages]);
   return (
     <article
-      className="diary-item mb-6 border-b border-dashed border-border/30 pb-6 last:border-b-0 last:pb-0"
+      className="mb-6 border-b border-dashed border-border/30 pb-6 last:border-b-0 last:pb-0"
       tabIndex={0}
       role="article"
       aria-label={`${time} 时间段的记录`}

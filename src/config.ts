@@ -16,6 +16,15 @@ export const SITE = {
     text: "Edit page",
     url: "https://github.com/vsme/obsidian-blog-data",
   },
+  comments: {
+    enabled: true, // 启用评论功能
+    giscus: {
+      repo: "vsme/comments",
+      repoId: "R_kgDOHKDnLA",
+      category: "Announcements",
+      categoryId: "DIC_kwDOHKDnLM4CSYnZ",
+    },
+  },
   dynamicOgImage: false,
   dir: "ltr", // "rtl" | "auto"
   lang: "zh-CN", // html lang code. Set this empty and default will be "en"

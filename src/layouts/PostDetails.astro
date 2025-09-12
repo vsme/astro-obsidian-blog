@@ -172,7 +172,29 @@ const nextPost =
 
     <ShareLinks />
 
-    <hr class="my-6 border-dashed" />
+    {
+      SITE.comments.enabled && (
+        <giscus-widget
+          id="comments"
+          repo={SITE.comments.giscus.repo}
+          repoid={SITE.comments.giscus.repoId}
+          category={SITE.comments.giscus.category}
+          categoryid={SITE.comments.giscus.categoryId}
+          mapping="pathname"
+          strict="0"
+          reactionsenabled="1"
+          emitmetadata="0"
+          inputposition="top"
+          theme="preferred_color_scheme"
+          lang="zh-CN"
+          loading="lazy"
+        />
+      )
+    }
+
+    <hr
+      class={`my-6 ${SITE.comments.enabled ? "border-none" : "border-dashed"}`}
+    />
 
     <BackToTopButton />
 

@@ -60,42 +60,35 @@
   reflectPreference();
 
   function initThemeControls() {
-    function setThemeFeature() {
-      // set on load so screen readers can get the latest value on the button
-      reflectPreference();
+    // set on load so screen readers can get the latest value on the button
+    reflectPreference();
 
-      // Helper function to add theme toggle functionality
-      function addThemeToggle(selector) {
-        const btn = document.querySelector(selector);
-        if (btn) {
-          // Add cursor pointer style for iOS Safari compatibility
-          btn.style.cursor = "pointer";
+    // Helper function to add theme toggle functionality
+    function addThemeToggle(selector) {
+      const btn = document.querySelector(selector);
+      if (btn) {
+        // Add cursor pointer style for iOS Safari compatibility
+        btn.style.cursor = "pointer";
 
-          const toggleTheme = () => {
-            themeValue = themeValue === "light" ? "dark" : "light";
-            setPreference();
-          };
+        const toggleTheme = () => {
+          themeValue = themeValue === "light" ? "dark" : "light";
+          setPreference();
+        };
 
-          // Add click event listener
-          btn.addEventListener("click", toggleTheme);
+        // Add click event listener
+        btn.addEventListener("click", toggleTheme);
 
-          // Add touchend event listener for iOS Safari compatibility
-          btn.addEventListener("touchend", e => {
-            e.preventDefault();
-            toggleTheme();
-          });
-        }
+        // Add touchend event listener for iOS Safari compatibility
+        btn.addEventListener("touchend", e => {
+          e.preventDefault();
+          toggleTheme();
+        });
       }
-
-      // Add theme toggle functionality to both buttons
-      addThemeToggle("#theme-btn");
-      addThemeToggle("#theme-btn-mobile");
     }
 
-    setThemeFeature();
-
-    // Runs on view transitions navigation
-    document.addEventListener("astro:after-swap", setThemeFeature);
+    // Add theme toggle functionality to both buttons
+    addThemeToggle("#theme-btn");
+    addThemeToggle("#theme-btn-mobile");
   }
 
   // Set theme-color value before page transition
@@ -302,15 +295,11 @@
 
   // ===== 初始化所有功能 =====
 
-  // 页面加载完成后初始化
-  window.onload = () => {
-    initThemeControls();
-  };
-
   // 监听Astro页面导航事件，重新初始化所有控制器
   document.addEventListener("astro:page-load", () => {
     initVideoControls();
     initVideoObserver();
+    initThemeControls();
   });
 
   // 离开前记录当前页面

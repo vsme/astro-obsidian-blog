@@ -23,6 +23,7 @@ export const SITE = {
       repoId: "R_kgDOHKDnLA",
       category: "Announcements",
       categoryId: "DIC_kwDOHKDnLM4CSYnZ",
+      lang: "zh-CN",
     },
   },
   dynamicOgImage: false,

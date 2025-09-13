@@ -134,14 +134,6 @@ const structuredData = {
     <ClientRouter />
 
     <script is:inline src="/app-controls.js"></script>
-
-    {
-      SITE.comments.enabled && (
-        <script>
-          import "giscus";
-        </script>
-      )
-    }
   </head>
   <body>
     <slot />

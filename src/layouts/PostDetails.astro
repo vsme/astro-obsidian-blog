@@ -15,6 +15,7 @@ import IconChevronLeft from "@/assets/icons/IconChevronLeft.svg";
 import IconChevronRight from "@/assets/icons/IconChevronRight.svg";
 import { SITE } from "@/config";
 import MediaCard from "../components/MediaCard.astro";
+import Comments from "@/components/Comments.tsx";
 
 export interface Props {
   post: CollectionEntry<"blog">;
@@ -172,25 +173,7 @@ const nextPost =
 
     <ShareLinks />
 
-    {
-      SITE.comments.enabled && (
-        <giscus-widget
-          id="comments"
-          repo={SITE.comments.giscus.repo}
-          repoid={SITE.comments.giscus.repoId}
-          category={SITE.comments.giscus.category}
-          categoryid={SITE.comments.giscus.categoryId}
-          mapping="pathname"
-          strict="0"
-          reactionsenabled="1"
-          emitmetadata="0"
-          inputposition="top"
-          theme="preferred_color_scheme"
-          lang="zh-CN"
-          loading="lazy"
-        />
-      )
-    }
+    {SITE.comments.enabled && <Comments client:only="react" />}
 
     <hr
       class={`my-6 ${SITE.comments.enabled ? "border-none" : "border-dashed"}`}

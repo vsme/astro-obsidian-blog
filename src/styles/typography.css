@@ -173,27 +173,3 @@
     }
   }
 }
-
-/* 流淌渐变动画 */
-@keyframes flow {
-  from {
-    background-position: 300vw 0;
-  }
-  to {
-    background-position: 0 0;
-  }
-}
-
-.animate-gradient-flow {
-  background: linear-gradient(
-    120deg,
-    rgba(217, 70, 239, 0.25) 0%,
-    rgba(251, 191, 36, 0.25) 25%,
-    rgba(14, 165, 233, 0.25) 50%,
-    rgba(251, 191, 36, 0.25) 75%,
-    rgba(217, 70, 239, 0.25) 100%
-  );
-  background-repeat: repeat-x;
-  background-size: 300vw 100%;
-  animation: flow 8s linear infinite;
-}

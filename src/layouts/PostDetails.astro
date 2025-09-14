@@ -119,9 +119,8 @@ const nextPost =
 
     {
       summary && (
-        <div class="relative mt-6 mb-8 rounded-lg border border-purple-500/20 p-4 font-sans selection:bg-purple-800/40 dark:selection:bg-purple-200/50">
-          <div class="animate-gradient-flow pointer-events-none absolute -inset-1 rounded-2xl opacity-50 blur-md dark:opacity-40" />
-          <div class="relative mb-3 flex items-center gap-2">
+        <div class="mt-6 mb-8 rounded-lg border border-purple-500/10 bg-gradient-to-br from-purple-500/20 via-purple-500/5 to-blue-500/10 p-4 font-sans shadow-[inset_0_2px_6px_rgba(0,0,0,0.05)] selection:bg-purple-800/40 dark:selection:bg-purple-200/50">
+          <div class="mb-3 flex items-center gap-2">
             <svg class="h-5 w-5" fill="url(#starGradient)" viewBox="0 0 24 24">
               <defs>
                 <linearGradient
@@ -148,9 +147,7 @@ const nextPost =
           </div>
 
           {summary && (
-            <p class="relative text-sm leading-relaxed text-foreground/80">
-              {summary}
-            </p>
+            <p class="text-sm leading-relaxed text-foreground/80">{summary}</p>
           )}
         </div>
       )

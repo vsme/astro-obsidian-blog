@@ -19,6 +19,7 @@ export const SITE = {
   comments: {
     enabled: true, // 启用评论功能
     giscus: {
+      host: "https://commits.bgo.me", // 非自建请填写 https://giscus.app
       repo: "vsme/comments",
       repoId: "R_kgDOHKDnLA",
       category: "Announcements",

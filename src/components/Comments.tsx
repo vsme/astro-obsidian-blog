@@ -29,6 +29,7 @@ export default function Comments () {
   }, []);
   return (
     <Giscus
+      host={SITE.comments.giscus.host}
       repo={SITE.comments.giscus.repo}
       repoId={SITE.comments.giscus.repoId}
       category={SITE.comments.giscus.category}

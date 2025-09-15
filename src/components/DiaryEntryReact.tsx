@@ -176,7 +176,7 @@ const DiaryEntryReact: React.FC<DiaryEntryProps> = ({
       >
         {timeBlocks.map((block, index) => (
           <TimelineItemReact
-            key={`${block.time}-${index}`}
+            key={`${date}-${block.time}-${index}`}
             time={block.time}
             date={date}
             text={block.text}

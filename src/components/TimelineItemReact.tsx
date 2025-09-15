@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import MediaCard from "./MediaCard";
+import EmojiReactions from "./EmojiReactions";
 import type { MediaCardData } from "../types/media";
 
 // 导入 lightgallery 样式
@@ -274,6 +275,11 @@ const TimelineItemReact: React.FC<TimelineItemProps> = ({
                   <MediaCard mediaData={musicData} cardType="music" />
                 </section>
               )}
+
+              {/* 表情组件 */}
+              <EmojiReactions
+                id={`emoji-reactions-${date}-${time.replace(":", "-")}`}
+              />
             </div>
           </div>
         </div>

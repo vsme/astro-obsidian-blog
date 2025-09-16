@@ -1,4 +1,9 @@
 import React, { useState, useRef, useEffect } from "react";
+import {
+  getContentReactions,
+  toggleEmojiReaction,
+  generateUserHash,
+} from "../db/supabase";
 
 // 表情数据接口
 interface EmojiReaction {
@@ -23,8 +28,8 @@ const EmojiButton: React.FC<{
       type="button"
       className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 transition-all duration-200 hover:scale-105 ${
         isActive
-          ? "bg-skin-accent/20 border-skin-accent text-skin-accent"
-          : "bg-skin-fill border-skin-line"
+          ? "border-accent bg-accent/10 text-accent"
+          : "border-border bg-background"
       }`}
       onClick={onClick}
     >
@@ -43,18 +48,54 @@ const EmojiReactions: React.FC<{ id: string }> = ({ id }) => {
   const [menuPosition, setMenuPosition] = useState<"left" | "center" | "right">(
     "center"
   );
+  const [loading, setLoading] = useState(false);
+  const [userHash, setUserHash] = useState<string>("");
   const menuRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const [emojiReactions, setEmojiReactions] = useState<EmojiReaction[]>([
-    { emoji: "👍", label: "+1", count: 0, isActive: false, defaultShow: true },
-    { emoji: "👎", label: "-1", count: 0, isActive: false, defaultShow: true },
-    { emoji: "🎉", label: "好耶", count: 0, isActive: false },
+    { emoji: "👍", label: "+1", count: 0, isActive: false, defaultShow: false },
+    { emoji: "👎", label: "-1", count: 0, isActive: false, defaultShow: false },
     { emoji: "😄", label: "大笑", count: 0, isActive: false },
     { emoji: "😕", label: "困惑", count: 0, isActive: false },
+    { emoji: "🎉", label: "好耶", count: 0, isActive: false },
     { emoji: "❤️", label: "爱了", count: 0, isActive: false },
     { emoji: "🚀", label: "太快啦", count: 0, isActive: false },
     { emoji: "👀", label: "围观", count: 0, isActive: false },
   ]);
+
+  // 初始化用户哈希（仅在客户端）
+  useEffect(() => {
+    setUserHash(generateUserHash());
+  }, []);
+
+  // 加载表情反应数据
+  useEffect(() => {
+    if (!userHash) return; // 等待 userHash 初始化完成
+
+    const loadReactions = async () => {
+      try {
+        const reactions = await getContentReactions(id, userHash);
+
+        setEmojiReactions(prev =>
+          prev.map(reaction => {
+            const dbReaction = reactions.find(
+              (r: { emoji: string; count: number; is_active: boolean }) =>
+                r.emoji === reaction.emoji
+            );
+            return {
+              ...reaction,
+              count: dbReaction?.count || 0,
+              isActive: dbReaction?.is_active || false,
+            };
+          })
+        );
+      } catch (error) {
+        console.error("Failed to load reactions:", error);
+      }
+    };
+
+    loadReactions();
+  }, [id, userHash]);
 
   // 监听点击外部区域事件
   useEffect(() => {
@@ -74,22 +115,36 @@ const EmojiReactions: React.FC<{ id: string }> = ({ id }) => {
   }, [isMenuOpen]);
 
   // 处理表情点击
-  const handleEmojiClick = (index: number) => {
-    setEmojiReactions(prev =>
-      prev.map((reaction, i) => {
-        if (i === index) {
-          const newIsActive = !reaction.isActive;
-          return {
-            ...reaction,
-            isActive: newIsActive,
-            count: newIsActive
-              ? reaction.count + 1
-              : Math.max(0, reaction.count - 1),
-          };
-        }
-        return reaction;
-      })
-    );
+  const handleEmojiClick = async (index: number) => {
+    if (loading) return;
+
+    const reaction = emojiReactions[index];
+    setLoading(true);
+
+    try {
+      const result = await toggleEmojiReaction(id, reaction.emoji, userHash);
+
+      if (result) {
+        setEmojiReactions(prev =>
+          prev.map((r, i) => {
+            if (i === index) {
+              return {
+                ...r,
+                count: result.new_count,
+                isActive: result.is_active,
+              };
+            }
+            return r;
+          })
+        );
+      }
+    } catch (error) {
+      console.error("Failed to toggle reaction:", error);
+      // 可以在这里添加错误提示
+    } finally {
+      setLoading(false);
+    }
+
     // 点击表情后关闭菜单
     setIsMenuOpen(false);
   };
@@ -119,7 +174,10 @@ const EmojiReactions: React.FC<{ id: string }> = ({ id }) => {
       <div className="flex flex-wrap items-center gap-2">
         {/* 已激活的表情反应显示 */}
         {emojiReactions
-          .filter(reaction => reaction.isActive || reaction.defaultShow)
+          .filter(
+            reaction =>
+              reaction.count > 0 || reaction.isActive || reaction.defaultShow
+          )
           .map(reaction => (
             <EmojiButton
               key={reaction.emoji}
@@ -136,7 +194,7 @@ const EmojiReactions: React.FC<{ id: string }> = ({ id }) => {
           <button
             ref={buttonRef}
             aria-label="添加回应"
-            className="link-secondary border-skin-line hover:bg-skin-fill inline-flex cursor-pointer items-center gap-1 rounded-full border px-1 py-1 transition-all duration-200"
+            className="inline-flex cursor-pointer items-center gap-1 rounded-full border border-border px-1 py-1 transition-all duration-200 hover:bg-background"
             onClick={toggleMenu}
           >
             <svg
@@ -163,14 +221,14 @@ const EmojiReactions: React.FC<{ id: string }> = ({ id }) => {
                     : "left-0"
               }`}
             >
-              <p className="text-skin-base/70 m-2 overflow-hidden text-sm text-ellipsis whitespace-nowrap">
+              <p className="m-2 overflow-hidden text-sm text-ellipsis whitespace-nowrap text-foreground/70">
                 {hoveredEmoji
                   ? emojiReactions.find(r => r.emoji === hoveredEmoji)?.label ||
                     "发表你的看法"
                   : "发表你的看法"}
               </p>
-              <div className="border-skin-line my-2 border-t"></div>
-              <div className="m-2 grid grid-cols-3 gap-1">
+              <div className="my-2 border-t border-border"></div>
+              <div className="m-2 grid grid-cols-4 gap-1">
                 {emojiReactions
                   .filter(reaction => !reaction.defaultShow)
                   .map(reaction => (
@@ -182,10 +240,10 @@ const EmojiReactions: React.FC<{ id: string }> = ({ id }) => {
                           : `表示 ${reaction.label}`
                       }
                       type="button"
-                      className={`p-1.5 transition-all duration-200 hover:scale-125 ${
+                      className={`rounded-md p-1.5 transition-all duration-200 hover:scale-125 ${
                         reaction.isActive
-                          ? "has-reacted bg-skin-accent/10 border-skin-accent text-skin-accent"
-                          : "border-skin-line hover:bg-skin-fill"
+                          ? "has-reacted border-accent bg-accent/10 text-accent"
+                          : "border-border hover:bg-background"
                       }`}
                       onClick={() =>
                         handleEmojiClick(emojiReactions.indexOf(reaction))

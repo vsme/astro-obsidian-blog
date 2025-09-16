@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import MediaCard from "./MediaCard";
 import EmojiReactions from "./EmojiReactions";
 import type { MediaCardData } from "../types/media";
+import { SUPABASE_URL, SUPABASE_KEY } from "astro:env/client";
 
 // 导入 lightgallery 样式
 import "lightgallery/css/lightgallery.css";
@@ -277,9 +278,11 @@ const TimelineItemReact: React.FC<TimelineItemProps> = ({
               )}
 
               {/* 表情组件 */}
-              <EmojiReactions
-                id={`emoji-reactions-${date}-${time.replace(":", "-")}`}
-              />
+              {SUPABASE_URL && SUPABASE_KEY && (
+                <EmojiReactions
+                  id={`emoji-reactions-${date}-${time.replace(":", "-")}`}
+                />
+              )}
             </div>
           </div>
         </div>

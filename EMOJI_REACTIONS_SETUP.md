@@ -1,10 +1,10 @@
-# 表情反应功能设置指南
+# 表情功能设置指南
 
-本指南将帮助你为博客添加基于 Supabase 的动态表情反应功能。
+本指南将帮助你为博客添加基于 Supabase 的动态表情功能。
 
 ## 🚀 功能特性
 
-- ✅ 实时表情反应统计
+- ✅ 实时表情统计
 - ✅ 用户状态持久化（基于浏览器指纹）
 - ✅ 响应式设计，支持移动端
 - ✅ GitHub 风格的表情选择器
@@ -62,7 +62,7 @@ import EmojiReactions from '@/components/EmojiReactions';
   <h1>我的博客文章</h1>
   <p>文章内容...</p>
   
-  <!-- 表情反应组件 -->
+  <!-- 表情组件 -->
   <EmojiReactions id="post-unique-id" client:load />
 </div>
 ```
@@ -93,7 +93,7 @@ const [emojiReactions, setEmojiReactions] = useState<EmojiReaction[]>([
 
 1. **行级安全策略 (RLS)**：防止直接数据库访问
 2. **用户指纹识别**：基于浏览器特征生成用户标识
-3. **限流保护**：防止恶意刷表情反应，每个 IP 每分钟最多 60 次
+3. **限流保护**：防止恶意刷表情，每个 IP 每分钟最多 60 次
 4. **函数级权限控制**：只能通过预定义函数操作数据
 
 ## 🐛 故障排除
@@ -120,5 +120,5 @@ const [emojiReactions, setEmojiReactions] = useState<EmojiReaction[]>([
 ## 📊 数据库表结构
 
 - `emoji_reactions`: 存储每个内容的表情统计
-- `user_reactions`: 记录用户的表情反应状态
+- `user_reactions`: 记录用户的表情状态
 - `rate_limit_records`: 限流记录（每个IP每分钟最多 60 次）

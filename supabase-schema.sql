@@ -26,7 +26,7 @@ COMMENT ON FUNCTION public.get_request_ip() IS '从请求头/连接信息解析�
 -- =========================================================
 -- 1) 表结构
 -- =========================================================
--- 用户表情反应（主表）
+-- 用户表情（主表）
 CREATE TABLE IF NOT EXISTS public.user_reactions (
   id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   content_id  text NOT NULL,

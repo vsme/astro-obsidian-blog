@@ -41,7 +41,7 @@ const EmojiButton: React.FC<{
   );
 };
 
-// 主要的表情反应组件
+// 主要的表情组件
 const EmojiReactions: React.FC<{ id: string }> = ({ id }) => {
   const [hoveredEmoji, setHoveredEmoji] = useState<string | null>(null);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -68,7 +68,7 @@ const EmojiReactions: React.FC<{ id: string }> = ({ id }) => {
     setUserHash(generateUserHash());
   }, []);
 
-  // 加载表情反应数据
+  // 加载表情数据
   useEffect(() => {
     if (!userHash) return; // 等待 userHash 初始化完成
 
@@ -172,7 +172,7 @@ const EmojiReactions: React.FC<{ id: string }> = ({ id }) => {
   return (
     <div id={id} className="emoji-reactions border-skin-line/30 mt-4">
       <div className="flex flex-wrap items-center gap-2">
-        {/* 已激活的表情反应显示 */}
+        {/* 已激活的表情显示 */}
         {emojiReactions
           .filter(
             reaction =>
@@ -189,7 +189,7 @@ const EmojiReactions: React.FC<{ id: string }> = ({ id }) => {
             />
           ))}
 
-        {/* GitHub风格的表情反应菜单 */}
+        {/* GitHub风格的表情菜单 */}
         <div className="relative leading-[0]" ref={menuRef}>
           <button
             ref={buttonRef}

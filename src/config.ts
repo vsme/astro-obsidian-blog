@@ -3,7 +3,7 @@ export const SITE = {
   author: "Yawei Sun",
   profile: "https://bgo.me/",
   desc: "一个时间长河中的个人档案馆。",
-  title: "B!GO",
+  title: "Bingo!",
   ogImage: "og.jpg",
   lightAndDarkMode: true,
   postPerIndex: 5,

@@ -28,7 +28,7 @@ const EmojiButton: React.FC<{
       type="button"
       className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 transition-all duration-200 hover:scale-105 ${
         isActive
-          ? "border-accent bg-accent/10 text-accent"
+          ? "border-accent/40 bg-accent/10 text-accent"
           : "border-border bg-background"
       }`}
       onClick={onClick}
@@ -241,9 +241,7 @@ const EmojiReactions: React.FC<{ id: string }> = ({ id }) => {
                       }
                       type="button"
                       className={`rounded-md p-1.5 transition-all duration-200 hover:scale-125 ${
-                        reaction.isActive
-                          ? "has-reacted border-accent bg-accent/10 text-accent"
-                          : "border-border hover:bg-background"
+                        reaction.isActive ? "bg-accent/10" : ""
                       }`}
                       onClick={() =>
                         handleEmojiClick(emojiReactions.indexOf(reaction))

@@ -17,6 +17,8 @@
 - 🖼️ **动态 OG 图片** - 自动生成博客文章的 OG 图片
 - 📔 **时间线功能** - 首页默认展示日常时间线
 - 📚 **媒体卡片** - 支持电影、书籍等媒体信息展示
+- 💬 **评论功能** - 支持用户评论文章
+- 🥳 **表情功能** - 支持在日常时间线点击使用表情互动（无需登录）
 
 ## 🚀 项目结构
 
@@ -57,6 +59,8 @@
 - **代码格式化**: [Prettier](https://prettier.io/)
 - **代码检查**: [ESLint](https://eslint.org/)
 - **部署**: [Vercel](https://vercel.com/)
+- **留言** [Giscus](https://giscus.app/)
+- **数据库**: [Supabase](https://supabase.com/)
 
 ## 📦 安装和使用
 
@@ -100,6 +104,7 @@ pnpm preview
 - 主题设置
 - 分页设置
 - 功能开关
+- 表情功能配置参考 [EMOJI_REACTIONS_SETUP](./EMOJI_REACTIONS_SETUP.md)
 
 ## 📝 添加内容
 

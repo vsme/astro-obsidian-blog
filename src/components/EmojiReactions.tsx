@@ -5,6 +5,34 @@ import {
   generateUserHash,
 } from "../db/supabase";
 
+// Loading 图标组件
+const LoadingSpinner: React.FC<{ size?: "sm" | "md" }> = ({ size = "sm" }) => {
+  const sizeClass = size === "sm" ? "h-3 w-3" : "h-4 w-4";
+
+  return (
+    <svg
+      className={`${sizeClass} animate-spin text-current`}
+      xmlns="http://www.w3.org/2000/svg"
+      fill="none"
+      viewBox="0 0 24 24"
+    >
+      <circle
+        className="opacity-25"
+        cx="12"
+        cy="12"
+        r="10"
+        stroke="currentColor"
+        strokeWidth="4"
+      ></circle>
+      <path
+        className="opacity-75"
+        fill="currentColor"
+        d="m4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+      ></path>
+    </svg>
+  );
+};
+
 // 表情数据接口
 interface EmojiReaction {
   emoji: string;
@@ -20,22 +48,37 @@ const EmojiButton: React.FC<{
   label: string;
   count: number;
   isActive: boolean;
+  loading?: boolean;
   onClick: () => void;
-}> = ({ emoji, label, count, isActive, onClick }) => {
+}> = ({ emoji, label, count, isActive, loading = false, onClick }) => {
   return (
     <button
       aria-label={`表示 ${label}${count > 0 ? ` (${count})` : ""}`}
       type="button"
-      className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 transition-all duration-200 hover:scale-105 ${
+      disabled={loading}
+      className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 transition-all duration-200 ${
+        loading ? "cursor-not-allowed opacity-60" : "hover:scale-105"
+      } ${
         isActive
           ? "border-accent/40 bg-accent/10 text-accent"
           : "border-border bg-background"
       }`}
       onClick={onClick}
     >
-      <span className="text-xs">{emoji}</span>
-      {count > 0 && (
-        <span className="text-center text-xs font-medium">{count}</span>
+      {loading ? (
+        <div className="flex items-center gap-1">
+          <LoadingSpinner size="sm" />
+          {count > 0 && (
+            <span className="text-center text-xs font-medium">{count}</span>
+          )}
+        </div>
+      ) : (
+        <>
+          <span className="text-xs">{emoji}</span>
+          {count > 0 && (
+            <span className="text-center text-xs font-medium">{count}</span>
+          )}
+        </>
       )}
     </button>
   );
@@ -48,8 +91,10 @@ const EmojiReactions: React.FC<{ id: string }> = ({ id }) => {
   const [menuPosition, setMenuPosition] = useState<"left" | "center" | "right">(
     "center"
   );
-  const [loading, setLoading] = useState(false);
+  const [loadingEmoji, setLoadingEmoji] = useState<string[]>([]);
+  const [error, setError] = useState<string | null>(null);
   const [userHash, setUserHash] = useState<string>("");
+  const errorTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const [emojiReactions, setEmojiReactions] = useState<EmojiReaction[]>([
@@ -114,12 +159,26 @@ const EmojiReactions: React.FC<{ id: string }> = ({ id }) => {
     };
   }, [isMenuOpen]);
 
+  // 组件卸载时清理定时器
+  useEffect(() => {
+    return () => {
+      if (errorTimeoutRef.current) {
+        clearTimeout(errorTimeoutRef.current);
+        errorTimeoutRef.current = null;
+      }
+    };
+  }, []);
+
   // 处理表情点击
   const handleEmojiClick = async (index: number) => {
-    if (loading) return;
-
     const reaction = emojiReactions[index];
-    setLoading(true);
+    setLoadingEmoji(prev => [...prev, reaction.emoji]);
+    // 清除之前的错误和定时器
+    if (errorTimeoutRef.current) {
+      clearTimeout(errorTimeoutRef.current);
+      errorTimeoutRef.current = null;
+    }
+    setError(null);
 
     try {
       const result = await toggleEmojiReaction(id, reaction.emoji, userHash);
@@ -140,9 +199,15 @@ const EmojiReactions: React.FC<{ id: string }> = ({ id }) => {
       }
     } catch (error) {
       console.error("Failed to toggle reaction:", error);
-      // 可以在这里添加错误提示
+      setError("操作失败，请稍后重试");
+
+      // 3秒后自动清除错误提示
+      errorTimeoutRef.current = setTimeout(() => {
+        setError(null);
+        errorTimeoutRef.current = null;
+      }, 3000);
     } finally {
-      setLoading(false);
+      setLoadingEmoji(prev => prev.filter(emoji => emoji !== reaction.emoji));
     }
 
     // 点击表情后关闭菜单
@@ -185,6 +250,7 @@ const EmojiReactions: React.FC<{ id: string }> = ({ id }) => {
               label={reaction.label}
               count={reaction.count}
               isActive={reaction.isActive}
+              loading={loadingEmoji.includes(reaction.emoji)}
               onClick={() => handleEmojiClick(emojiReactions.indexOf(reaction))}
             />
           ))}
@@ -240,16 +306,25 @@ const EmojiReactions: React.FC<{ id: string }> = ({ id }) => {
                           : `表示 ${reaction.label}`
                       }
                       type="button"
-                      className={`rounded-md p-1.5 transition-all duration-200 hover:scale-125 ${
-                        reaction.isActive ? "bg-accent/10" : ""
-                      }`}
+                      disabled={loadingEmoji.includes(reaction.emoji)}
+                      className={`rounded-md p-1.5 transition-all duration-200 ${
+                        loadingEmoji.includes(reaction.emoji)
+                          ? "cursor-not-allowed opacity-60"
+                          : "hover:scale-125"
+                      } ${reaction.isActive ? "bg-accent/10" : ""}`}
                       onClick={() =>
                         handleEmojiClick(emojiReactions.indexOf(reaction))
                       }
                       onMouseEnter={() => setHoveredEmoji(reaction.emoji)}
                       onMouseLeave={() => setHoveredEmoji(null)}
                     >
-                      <span className="text-base">{reaction.emoji}</span>
+                      {loadingEmoji.includes(reaction.emoji) ? (
+                        <div className="flex items-center justify-center">
+                          <LoadingSpinner size="md" />
+                        </div>
+                      ) : (
+                        <span className="text-base">{reaction.emoji}</span>
+                      )}
                     </button>
                   ))}
               </div>
@@ -257,6 +332,25 @@ const EmojiReactions: React.FC<{ id: string }> = ({ id }) => {
           )}
         </div>
       </div>
+
+      {/* 错误提示 */}
+      {error && (
+        <div className="error-message absolute mt-2 flex animate-in items-center gap-2 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 transition-all duration-300 fade-in slide-in-from-top-2 dark:border-red-800 dark:bg-red-900/20 dark:text-red-400">
+          <svg
+            className="h-4 w-4 flex-shrink-0"
+            fill="currentColor"
+            viewBox="0 0 20 20"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              fillRule="evenodd"
+              d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
+              clipRule="evenodd"
+            />
+          </svg>
+          <span>{error}</span>
+        </div>
+      )}
     </div>
   );
 };

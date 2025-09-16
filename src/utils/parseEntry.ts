@@ -106,30 +106,29 @@ export async function parseEntry(entry: CollectionEntry<"diary">) {
     );
 
     // 解析 Markdown 无序列表为 HTML ul/li
-    text = text.replace(
-      /((?:^- .+(?:\n|$))+)/gm,
-      (match) => {
-        const items = match
-          .split('\n')
-          .filter(line => line.trim().startsWith('- '))
-          .map(line => `<li class="ml-4 list-disc">${line.substring(2).trim()}</li>`)
-          .join('');
-        return `<ul class="mt-1 mb-2 pl-2">${items}</ul>`;
-      }
-    );
+    text = text.replace(/((?:^- .+(?:\n|$))+)/gm, match => {
+      const items = match
+        .split("\n")
+        .filter(line => line.trim().startsWith("- "))
+        .map(
+          line => `<li class="ml-4 list-disc">${line.substring(2).trim()}</li>`
+        )
+        .join("");
+      return `<ul class="mt-1 mb-2 pl-2">${items}</ul>`;
+    });
 
     // 解析 Markdown 有序列表为 HTML ol/li
-    text = text.replace(
-      /((?:^\d+\. .+(?:\n|$))+)/gm,
-      (match) => {
-        const items = match
-          .split('\n')
-          .filter(line => /^\d+\. /.test(line.trim()))
-          .map(line => `<li class="ml-4 list-decimal">${line.replace(/^\d+\. /, '').trim()}</li>`)
-          .join('');
-        return `<ol class="mt-1 mb-2 pl-2">${items}</ol>`;
-      }
-    );
+    text = text.replace(/((?:^\d+\. .+(?:\n|$))+)/gm, match => {
+      const items = match
+        .split("\n")
+        .filter(line => /^\d+\. /.test(line.trim()))
+        .map(
+          line =>
+            `<li class="ml-4 list-decimal">${line.replace(/^\d+\. /, "").trim()}</li>`
+        )
+        .join("");
+      return `<ol class="mt-1 mb-2 pl-2">${items}</ol>`;
+    });
 
     // 提取图片并优化
     const images = [];
@@ -359,6 +358,40 @@ export async function parseEntry(entry: CollectionEntry<"diary">) {
         };
       }
     }
+
+    // 最后处理：将每个换行转换为独立的p段落
+    // 先标记已处理的ul、ol块，避免内部换行被处理
+    const htmlBlockRegex = /<(ul|ol)\b[^>]*>[\s\S]*?<\/\1>/g;
+    const htmlBlocks: string[] = [];
+    let blockIndex = 0;
+
+    // 用占位符替换HTML块
+    text = text.replace(htmlBlockRegex, match => {
+      // 为HTML块前后添加换行符
+      const placeholder = `\n__HTML_BLOCK_${blockIndex}__\n`;
+      htmlBlocks[blockIndex] = match;
+      blockIndex++;
+      return placeholder;
+    });
+
+    // 处理剩余文本的换行
+    text = text
+      .split("\n")
+      .filter(line => line.trim() !== "") // 过滤空行
+      .map(line => {
+        const trimmedLine = line.trim();
+        // 检查是否为占位符
+        if (trimmedLine.includes("__HTML_BLOCK_")) {
+          return trimmedLine;
+        }
+        return `<p class="mb-2">${trimmedLine}</p>`;
+      })
+      .join("");
+
+    // 恢复HTML块
+    htmlBlocks.forEach((block, index) => {
+      text = text.replace(`__HTML_BLOCK_${index}__`, block);
+    });
 
     if (
       text ||

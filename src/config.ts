@@ -18,14 +18,6 @@ export const SITE = {
   },
   comments: {
     enabled: true, // 启用评论功能
-    giscus: {
-      host: "https://giscus.app", // 可使用自建服务
-      repo: "vsme/comments",
-      repoId: "R_kgDOHKDnLA",
-      category: "Announcements",
-      categoryId: "DIC_kwDOHKDnLM4CSYnZ",
-      lang: "zh-CN",
-    },
   },
   dynamicOgImage: false,
   dir: "ltr", // "rtl" | "auto"

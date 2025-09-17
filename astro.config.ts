@@ -128,6 +128,36 @@ export default defineConfig({
         context: "client",
         optional: true,
       }),
+      PUBLIC_GISCUS_HOST: envField.string({
+        access: "public",
+        context: "client",
+        optional: true,
+      }),
+      PUBLIC_GISCUS_REPO: envField.string({
+        access: "public",
+        context: "client",
+        optional: true,
+      }),
+      PUBLIC_GISCUS_REPO_ID: envField.string({
+        access: "public",
+        context: "client",
+        optional: true,
+      }),
+      PUBLIC_GISCUS_CATEGORY: envField.string({
+        access: "public",
+        context: "client",
+        optional: true,
+      }),
+      PUBLIC_GISCUS_CATEGORY_ID: envField.string({
+        access: "public",
+        context: "client",
+        optional: true,
+      }),
+      PUBLIC_GISCUS_LANG: envField.string({
+        access: "public",
+        context: "client",
+        optional: true,
+      }),
     },
   },
   experimental: {

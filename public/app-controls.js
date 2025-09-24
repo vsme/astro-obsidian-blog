@@ -300,6 +300,9 @@
     initVideoControls();
     initVideoObserver();
     initThemeControls();
+
+    // Runs on view transitions navigation
+    document.addEventListener("astro:after-swap", initThemeControls);
   });
 
   // 离开前记录当前页面

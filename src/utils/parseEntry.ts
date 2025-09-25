@@ -99,6 +99,15 @@ export async function parseEntry(entry: CollectionEntry<"diary">) {
     // 移除代码块标识
     text = text.replace(/```(imgs|html|card-[\s\S]*?)[\s\S]*?```/g, "").trim();
 
+    // 解析 Markdown 加粗语法为 HTML strong mark 标签
+    // 处理 **text** 格式
+    text = text.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+    // 处理 __text__ 格式
+    text = text.replace(
+      /__([^_]+)__/g,
+      "<mark class='bg-accent/20 text-foreground px-0.5'>$1</mark>"
+    );
+
     // 解析 Markdown 链接为 HTML 链接
     text = text.replace(
       /\[([^\]]+)\]\(([^\)]+)\)/g,

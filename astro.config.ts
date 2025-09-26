@@ -19,6 +19,7 @@ import react from "@astrojs/react";
 import remarkWrap from "./src/utils/remarkWrap";
 import rehypeHeadingLinks from "./src/utils/rehypeHeadingLinks";
 import { remarkMediaCard } from "./src/utils/remarkMediaCard";
+import { remarkLinkProcessor } from "./src/utils/remarkLinkProcessor";
 import pagefind from "astro-pagefind";
 
 import compress from "astro-compress";
@@ -60,6 +61,7 @@ export default defineConfig({
   ],
   markdown: {
     remarkPlugins: [
+      [remarkLinkProcessor, { enableDebug: false }],
       [remarkMediaCard, { enableDebug: false }],
       [remarkToc, { heading: "目录" }],
       remarkMark,

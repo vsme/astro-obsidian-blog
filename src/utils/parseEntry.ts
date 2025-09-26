@@ -3,6 +3,7 @@ import {
   type ImageOptimizeOptions,
 } from "@/utils/optimizeImages";
 import { getVideoPath } from "@/utils/videoUtils";
+import { processLink } from "@/utils/linkProcessor";
 import type { CollectionEntry } from "astro:content";
 
 // 通用的poster路径优化函数
@@ -108,10 +109,14 @@ export async function parseEntry(entry: CollectionEntry<"diary">) {
       "<mark class='bg-accent/20 text-foreground px-0.5'>$1</mark>"
     );
 
-    // 解析 Markdown 链接为 HTML 链接
+    // 解析 Markdown 链接为 HTML 链接，并处理相对路径
     text = text.replace(
       /\[([^\]]+)\]\(([^\)]+)\)/g,
-      '<a href="$2" target="_blank" rel="noopener noreferrer" class="text-skin-accent font-semibold underline decoration-2 underline-offset-2 hover:decoration-4 hover:text-skin-accent-2 transition-all duration-200">$1</a>'
+      (match, linkText, href) => {
+        const processedHref = processLink(href);
+        console.log(href, processedHref);
+        return `<a href="${processedHref}" target="_blank" rel="noopener noreferrer" class="text-skin-accent font-semibold underline decoration-2 underline-offset-2 hover:decoration-4 hover:text-skin-accent-2 transition-all duration-200">${linkText}</a>`;
+      }
     );
 
     // 解析 Markdown 无序列表为 HTML ul/li

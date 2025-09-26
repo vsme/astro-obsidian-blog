@@ -19,7 +19,7 @@ interface Social {
   icon: (_props: Props) => Element;
 }
 
-export const SOCIALS: Social[] = [
+export const SOCIALS: readonly Social[] = [
   {
     name: "GitHub",
     href: "https://github.com/vsme",
@@ -58,7 +58,7 @@ export const SOCIALS: Social[] = [
   // },
 ] as const;
 
-export const SHARE_LINKS: Social[] = [
+export const SHARE_LINKS: readonly Social[] = [
   // {
   //   name: "WhatsApp",
   //   href: "https://wa.me/?text=",

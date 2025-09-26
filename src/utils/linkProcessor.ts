@@ -16,7 +16,7 @@ function extractSlugFromFile(filePath: string): string | undefined {
     if (!frontmatterMatch) return undefined;
 
     const frontmatter = frontmatterMatch[1];
-    const slugMatch = frontmatter.match(/^slug:\s*(.+)$/m);
+    const slugMatch = frontmatter.match(/^slug:[ \t]*([^\r\n]*)$/m);
 
     return slugMatch ? slugMatch[1].trim() : undefined;
   } catch {
@@ -105,8 +105,13 @@ export function processLink(href: string, currentFilePath?: string): string {
       return `/posts/${slug}`;
     }
 
-    // 如果没有slug，返回原链接
-    return href;
+    // 如果没有slug，使用文件名
+    const fileName = path
+      .basename(targetFilePath, path.extname(targetFilePath))
+      .replace(/\s/g, "-")
+      .toLowerCase();
+
+    return `/posts/${fileName}`;
   } catch {
     // 出错时返回原链接
     return href;

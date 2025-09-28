@@ -97,8 +97,22 @@ export async function parseEntry(entry: CollectionEntry<"diary">) {
     );
     let text = textMatch ? textMatch[1].trim() : blockContent.trim();
 
-    // 移除代码块标识
+    // 先保护代码块内容，避免被其他解析影响
+    const codeBlocks: { lang: string; code: string }[] = [];
+    text = text.replace(
+      /```(\w+)?\n?([\s\S]*?)```/g,
+      (match, lang = "text", code) => {
+        const placeholder = `\n++PROTECTED_CODE_BLOCK_${codeBlocks.length}_PROTECTED++\n`;
+        codeBlocks.push({ lang, code: code.trim() });
+        return placeholder;
+      }
+    );
+
+    // 移除其他类型的代码块标识（imgs、html、card-等）
     text = text.replace(/```(imgs|html|card-[\s\S]*?)[\s\S]*?```/g, "").trim();
+
+    // 解析 Markdown 行内代码为 HTML code 标签
+    text = text.replace(/`([^`]+)`/g, "<code>$1</code>");
 
     // 解析 Markdown 加粗语法为 HTML strong mark 标签
     // 处理 **text** 格式
@@ -382,7 +396,7 @@ export async function parseEntry(entry: CollectionEntry<"diary">) {
     // 用占位符替换HTML块
     text = text.replace(htmlBlockRegex, match => {
       // 为HTML块前后添加换行符
-      const placeholder = `\n__HTML_BLOCK_${blockIndex}__\n`;
+      const placeholder = `\n++HTML_BLOCK_${blockIndex}++\n`;
       htmlBlocks[blockIndex] = match;
       blockIndex++;
       return placeholder;
@@ -395,16 +409,35 @@ export async function parseEntry(entry: CollectionEntry<"diary">) {
       .map(line => {
         const trimmedLine = line.trim();
         // 检查是否为占位符
-        if (trimmedLine.includes("__HTML_BLOCK_")) {
+        if (
+          trimmedLine.includes("++HTML_BLOCK_") ||
+          trimmedLine.includes("++PROTECTED_CODE_BLOCK_")
+        ) {
           return trimmedLine;
         }
         return `<p class="mb-2">${trimmedLine}</p>`;
       })
       .join("");
 
+    // 渲染代码块并恢复到文本中
+    // todo: 高亮处理
+    for (let i = 0; i < codeBlocks.length; i++) {
+      const { lang, code } = codeBlocks[i];
+      // 使用简单的HTML pre/code结构，配合Astro的CSS样式
+      const escapedCode = code
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+
+      const html = `<pre class="mb-2" data-language="${lang}"><code>${escapedCode}</code></pre>`;
+      text = text.replace(`++PROTECTED_CODE_BLOCK_${i}_PROTECTED++`, html);
+    }
+
     // 恢复HTML块
     htmlBlocks.forEach((block, index) => {
-      text = text.replace(`__HTML_BLOCK_${index}__`, block);
+      text = text.replace(`++HTML_BLOCK_${index}++`, block);
     });
 
     if (

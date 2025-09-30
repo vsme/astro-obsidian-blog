@@ -176,6 +176,17 @@ const nextPost =
       class={`my-6 ${SITE.comments.enabled ? "border-none" : "border-dashed"}`}
     />
 
+    <!-- 移动端悬浮目录按钮 -->
+    <button
+      id="mobile-toc-button"
+      class="sticky bottom-10 left-5 z-50 flex h-11 w-11 items-center justify-center rounded-full border border-border bg-background text-foreground shadow-lg transition-all duration-300 hover:scale-110 xl:hidden"
+      aria-label="打开目录"
+    >
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M3 4h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"></path>
+      </svg>
+    </button>
+
     <BackToTopButton />
 
     <!-- Previous/Next Post Buttons -->
@@ -210,6 +221,27 @@ const nextPost =
       }
     </div>
   </main>
+
+  <!-- 移动端目录弹出层 -->
+  <div id="mobile-toc-overlay" class="mobile-toc-overlay"></div>
+  <div id="mobile-toc-panel" class="mobile-toc-panel">
+    <div class="toc-header">
+      <h3>目录</h3>
+      <button id="mobile-toc-close" class="close-btn" aria-label="关闭目录">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+          <path
+            d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"
+          ></path>
+        </svg>
+      </button>
+    </div>
+    <div class="toc-content">
+      <ul id="mobile-toc-list">
+        <!-- 目录内容将通过JavaScript动态生成 -->
+      </ul>
+    </div>
+  </div>
+
   <Footer />
 </Layout>
 
@@ -357,9 +389,103 @@ const nextPost =
     updateScrollProgress();
     addCopyButtons();
 
+    // 移动端目录功能
+    function initMobileToc(
+      tocLinks: (HTMLAnchorElement & { urlHash: string })[]
+    ) {
+      const mobileButton = document.getElementById("mobile-toc-button");
+      const mobileOverlay = document.getElementById("mobile-toc-overlay");
+      const mobilePanel = document.getElementById("mobile-toc-panel");
+      const mobileClose = document.getElementById("mobile-toc-close");
+      const mobileTocList = document.getElementById("mobile-toc-list");
+
+      // 如果没有目录链接，隐藏移动端按钮
+      if (!tocLinks || tocLinks.length === 0) {
+        if (mobileButton) mobileButton.style.display = "none";
+        return;
+      }
+
+      // 生成移动端目录内容
+      if (mobileTocList) {
+        mobileTocList.innerHTML = "";
+        tocLinks.forEach(link => {
+          const li = document.createElement("li");
+          const a = document.createElement("a");
+          a.href = link.href;
+          a.textContent = link.textContent;
+          a.className = link.className;
+
+          // 获取标题级别并设置data-level属性
+          const headingLevel = getHeadingLevel(link);
+          li.setAttribute("data-level", headingLevel.toString());
+
+          // 添加点击事件，点击后关闭移动端目录
+          a.addEventListener("click", () => {
+            closeMobileToc();
+          });
+
+          li.appendChild(a);
+          mobileTocList.appendChild(li);
+        });
+      }
+
+      // 获取标题级别的辅助函数
+      function getHeadingLevel(link: HTMLAnchorElement): number {
+        const href = link.getAttribute("href");
+        if (!href) return 1;
+
+        const targetId = href.slice(1);
+        const targetElement = document.getElementById(
+          decodeURIComponent(targetId)
+        );
+
+        if (targetElement) {
+          const tagName = targetElement.tagName.toLowerCase();
+          if (tagName.match(/^h[1-6]$/)) {
+            return parseInt(tagName.charAt(1));
+          }
+        }
+
+        return 1;
+      }
+
+      // 打开移动端目录
+      function openMobileToc() {
+        if (mobileOverlay && mobilePanel) {
+          mobileOverlay.classList.add("active");
+          mobilePanel.classList.add("active");
+        }
+      }
+
+      // 关闭移动端目录
+      function closeMobileToc() {
+        if (mobileOverlay && mobilePanel) {
+          mobileOverlay.classList.remove("active");
+          mobilePanel.classList.remove("active");
+        }
+      }
+
+      // 绑定事件
+      if (mobileButton) {
+        mobileButton.addEventListener("click", openMobileToc);
+      }
+
+      if (mobileClose) {
+        mobileClose.addEventListener("click", closeMobileToc);
+      }
+
+      if (mobileOverlay) {
+        mobileOverlay.addEventListener("click", closeMobileToc);
+      }
+    }
+
     const tocLinks: (HTMLAnchorElement & { urlHash: string })[] = Array.from(
       document.querySelectorAll(".article-toc-nav a")
     );
+
+    // 初始化移动端目录功能
+    initMobileToc(tocLinks);
+
     if (tocLinks.length === 0) return;
 
     tocLinks[0].classList.add("active");

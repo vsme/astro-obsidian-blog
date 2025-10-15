@@ -158,6 +158,20 @@ export async function parseEntry(entry: CollectionEntry<"diary">) {
       return `<ol class="mt-1 mb-2 pl-2">${items}</ol>`;
     });
 
+    // 解析 Markdown 引用文本为 HTML blockquote
+    text = text.replace(/((?:^> .*(?:\n|$))+)/gm, match => {
+      const lines = match
+        .split("\n")
+        .filter(line => line.trim().startsWith("> "))
+        .map(line => {
+          const content = line.substring(2).trim(); // 移除 "> " 前缀
+          return content || "&nbsp;"; // 如果内容为空，使用不间断空格
+        })
+        .map(line => `<p class="mb-1 last:mb-0">${line}</p>`)
+        .join("");
+      return `<blockquote class="px-3 py-2 my-2 italic text-foreground/80 relative"><span class="text-4xl text-foreground/30 absolute -left-1 -top-1">“</span>${lines}<span class="text-4xl text-foreground/30 absolute -right-0 -bottom-2">”</span></blockquote>`;
+    });
+
     // 提取图片并优化
     const images = [];
     const imgMatches = blockContent.match(/```imgs([\s\S]*?)```/);

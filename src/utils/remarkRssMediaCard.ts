@@ -7,6 +7,9 @@ import type {
   MediaCardType,
 } from "../types/media";
 
+import { extractUrl, extractImplicitPoster } from "./urlExtractor";
+import { processLink } from "./linkProcessor";
+
 // 定义基本的Node类型
 interface Parent extends Node {
   children: Node[];
@@ -15,7 +18,10 @@ interface Parent extends Node {
 /**
  * 解析卡片内容的通用函数
  */
-function parseCardContent(content: string): MediaCardData | null {
+function parseCardContent(
+  content: string,
+  currentFilePath?: string
+): MediaCardData | null {
   const lines = content
     .trim()
     .split("\n")
@@ -24,10 +30,17 @@ function parseCardContent(content: string): MediaCardData | null {
 
   for (const line of lines) {
     const colonIndex = line.indexOf(":");
-    if (colonIndex === -1) continue;
+    if (colonIndex === -1) {
+      // 隐式海报支持
+      const implicitPoster = extractImplicitPoster(line);
+      if (implicitPoster && !data.poster) {
+        data.poster = implicitPoster;
+      }
+      continue;
+    }
 
     const key = line.substring(0, colonIndex).trim();
-    const value = line.substring(colonIndex + 1).trim();
+    let value = line.substring(colonIndex + 1).trim();
 
     if (!key || !value) continue;
 
@@ -35,6 +48,23 @@ function parseCardContent(content: string): MediaCardData | null {
     if (/^\d+(\.\d+)?$/.test(value)) {
       data[key] = parseFloat(value);
     } else {
+      if (
+        key === "poster" ||
+        key === "external_url" ||
+        key === "url" ||
+        key === "douban_url"
+      ) {
+        value = extractUrl(value);
+        if (key !== "poster") {
+          if (
+            !value.match(/^https?:\/\//i) &&
+            !value.match(/\.[a-zA-Z0-9]+$/)
+          ) {
+            value += ".md";
+          }
+          value = processLink(value, currentFilePath);
+        }
+      }
       data[key] = value;
     }
   }
@@ -48,13 +78,19 @@ function parseCardContent(content: string): MediaCardData | null {
   return data as unknown as MediaCardData;
 }
 
+import type { Plugin } from "unified";
+
 /**
  * Remark 插件：转换媒体卡片代码块为简单的链接
  */
-export function remarkRssMediaCard(options: MediaCardOptions = {}) {
+export const remarkRssMediaCard: Plugin<[MediaCardOptions?], Root> = (
+  options = {}
+) => {
   const { enableDebug = false } = options;
 
-  return function transformer(tree: Root) {
+  return (tree, file) => {
+    const currentFilePath = file?.path || file?.history?.[0];
+
     // 两阶段处理：首先收集所有需要处理的节点
     const nodesToProcess: Array<{
       node: Code;
@@ -77,7 +113,7 @@ export function remarkRssMediaCard(options: MediaCardOptions = {}) {
       }
 
       const cardType = cardTypeMatch[1];
-      const mediaData = parseCardContent(node.value);
+      const mediaData = parseCardContent(node.value, currentFilePath);
 
       if (!mediaData) {
         if (enableDebug) {
@@ -151,17 +187,20 @@ export function remarkRssMediaCard(options: MediaCardOptions = {}) {
 
         // 创建简单的HTML链接节点
         const linkText = getDisplayText();
+        const cardUrl = getCardUrl();
+        const isInternalUrl = cardUrl.startsWith("/");
+
         const linkNode = {
           type: "paragraph",
           children: [
             {
               type: "link",
-              url: getCardUrl(),
+              url: cardUrl,
               title: linkText,
               data: {
                 hProperties: {
-                  target: "_blank",
-                  rel: "noopener noreferrer",
+                  target: isInternalUrl ? "_self" : "_blank",
+                  rel: isInternalUrl ? undefined : "noopener noreferrer",
                 },
               },
               children: [
@@ -191,6 +230,6 @@ export function remarkRssMediaCard(options: MediaCardOptions = {}) {
       }
     }
   };
-}
+};
 
 export default remarkRssMediaCard;

@@ -4,6 +4,7 @@ import {
 } from "@/utils/optimizeImages";
 import { getVideoPath } from "@/utils/videoUtils";
 import { processLink } from "@/utils/linkProcessor";
+import { extractUrl, extractImplicitPoster } from "@/utils/urlExtractor";
 import type { CollectionEntry } from "astro:content";
 
 // 通用的poster路径优化函数
@@ -129,7 +130,8 @@ export async function parseEntry(entry: CollectionEntry<"diary">) {
       (match, linkText, href) => {
         const processedHref = processLink(href);
         console.log(href, processedHref);
-        return `<a href="${processedHref}" target="_blank" rel="noopener noreferrer" class="text-skin-accent font-semibold underline decoration-2 underline-offset-2 hover:decoration-4 hover:text-skin-accent-2 transition-all duration-200">${linkText}</a>`;
+        const isInternal = processedHref.startsWith("/");
+        return `<a href="${processedHref}" ${isInternal ? "" : 'target="_blank" rel="noopener noreferrer" '}class="text-skin-accent font-semibold underline decoration-2 underline-offset-2 hover:decoration-4 hover:text-skin-accent-2 transition-all duration-200">${linkText}</a>`;
       }
     );
 
@@ -268,8 +270,27 @@ export async function parseEntry(entry: CollectionEntry<"diary">) {
 
       // 解析电影信息
       const parseField = (field: string): string | undefined => {
-        const match = cardContent.match(new RegExp(`${field}:\s*(.+)`, "m"));
-        return match ? match[1].trim() : undefined;
+        const match = cardContent.match(new RegExp(`${field}:\\s*(.+)`, "m"));
+        let value = match ? match[1].trim() : undefined;
+        if (
+          value &&
+          (field === "poster" ||
+            field === "external_url" ||
+            field === "url" ||
+            field === "douban_url")
+        ) {
+          value = extractUrl(value);
+          if (field !== "poster") {
+            if (
+              !value.match(/^https?:\/\//i) &&
+              !value.match(/\.[a-zA-Z0-9]+$/)
+            ) {
+              value += ".md";
+            }
+            value = processLink(value);
+          }
+        }
+        return value;
       };
 
       const parseNumber = (field: string): number | undefined => {
@@ -279,7 +300,9 @@ export async function parseEntry(entry: CollectionEntry<"diary">) {
 
       const title = parseField("title");
       if (title) {
-        const optimizedPoster = await optimizePosterPath(parseField("poster"));
+        const posterStr =
+          parseField("poster") || extractImplicitPoster(cardContent);
+        const optimizedPoster = await optimizePosterPath(posterStr);
 
         movieData = {
           id: parseNumber("id"),
@@ -305,8 +328,27 @@ export async function parseEntry(entry: CollectionEntry<"diary">) {
 
       // 解析TV信息
       const parseField = (field: string): string | undefined => {
-        const match = cardContent.match(new RegExp(`${field}:\s*(.+)`, "m"));
-        return match ? match[1].trim() : undefined;
+        const match = cardContent.match(new RegExp(`${field}:\\s*(.+)`, "m"));
+        let value = match ? match[1].trim() : undefined;
+        if (
+          value &&
+          (field === "poster" ||
+            field === "external_url" ||
+            field === "url" ||
+            field === "douban_url")
+        ) {
+          value = extractUrl(value);
+          if (field !== "poster") {
+            if (
+              !value.match(/^https?:\/\//i) &&
+              !value.match(/\.[a-zA-Z0-9]+$/)
+            ) {
+              value += ".md";
+            }
+            value = processLink(value);
+          }
+        }
+        return value;
       };
 
       const parseNumber = (field: string): number | undefined => {
@@ -316,7 +358,9 @@ export async function parseEntry(entry: CollectionEntry<"diary">) {
 
       const title = parseField("title");
       if (title) {
-        const optimizedPoster = await optimizePosterPath(parseField("poster"));
+        const posterStr =
+          parseField("poster") || extractImplicitPoster(cardContent);
+        const optimizedPoster = await optimizePosterPath(posterStr);
 
         tvData = {
           id: parseField("id"),
@@ -341,8 +385,27 @@ export async function parseEntry(entry: CollectionEntry<"diary">) {
 
       // 解析书籍信息
       const parseField = (field: string): string | undefined => {
-        const match = cardContent.match(new RegExp(`${field}:\s*(.+)`, "m"));
-        return match ? match[1].trim() : undefined;
+        const match = cardContent.match(new RegExp(`${field}:\\s*(.+)`, "m"));
+        let value = match ? match[1].trim() : undefined;
+        if (
+          value &&
+          (field === "poster" ||
+            field === "external_url" ||
+            field === "url" ||
+            field === "douban_url")
+        ) {
+          value = extractUrl(value);
+          if (field !== "poster") {
+            if (
+              !value.match(/^https?:\/\//i) &&
+              !value.match(/\.[a-zA-Z0-9]+$/)
+            ) {
+              value += ".md";
+            }
+            value = processLink(value);
+          }
+        }
+        return value;
       };
 
       const parseNumber = (field: string): number | undefined => {
@@ -352,7 +415,9 @@ export async function parseEntry(entry: CollectionEntry<"diary">) {
 
       const title = parseField("title");
       if (title) {
-        const optimizedPoster = await optimizePosterPath(parseField("poster"));
+        const posterStr =
+          parseField("poster") || extractImplicitPoster(cardContent);
+        const optimizedPoster = await optimizePosterPath(posterStr);
 
         bookData = {
           id: parseField("id"),
@@ -376,8 +441,27 @@ export async function parseEntry(entry: CollectionEntry<"diary">) {
 
       // 解析音乐信息
       const parseField = (field: string): string | undefined => {
-        const match = cardContent.match(new RegExp(`${field}:\s*(.+)`, "m"));
-        return match ? match[1].trim() : undefined;
+        const match = cardContent.match(new RegExp(`${field}:\\s*(.+)`, "m"));
+        let value = match ? match[1].trim() : undefined;
+        if (
+          value &&
+          (field === "poster" ||
+            field === "external_url" ||
+            field === "url" ||
+            field === "douban_url")
+        ) {
+          value = extractUrl(value);
+          if (field !== "poster") {
+            if (
+              !value.match(/^https?:\/\//i) &&
+              !value.match(/\.[a-zA-Z0-9]+$/)
+            ) {
+              value += ".md";
+            }
+            value = processLink(value);
+          }
+        }
+        return value;
       };
 
       const parseNumber = (field: string): number | undefined => {
@@ -387,7 +471,9 @@ export async function parseEntry(entry: CollectionEntry<"diary">) {
 
       const title = parseField("title");
       if (title) {
-        const optimizedPoster = await optimizePosterPath(parseField("poster"));
+        const posterStr =
+          parseField("poster") || extractImplicitPoster(cardContent);
+        const optimizedPoster = await optimizePosterPath(posterStr);
 
         musicData = {
           title,

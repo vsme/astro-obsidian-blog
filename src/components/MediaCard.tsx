@@ -57,10 +57,10 @@ const MediaCard: React.FC<MediaCardProps> = ({
   };
 
   const getCardUrl = () => {
+    // 优先使用已经由 processLink 处理过的 internal url 或 external_url
     if (cardType === "music" && url) {
       return url;
     } else if (external_url) {
-      // 如果有external_url，优先使用
       return external_url;
     } else if (id) {
       let baseUrl;
@@ -86,11 +86,14 @@ const MediaCard: React.FC<MediaCardProps> = ({
     return "#";
   };
 
+  const cardUrl = getCardUrl();
+  const isInternalUrl = cardUrl.startsWith("/");
+
   return (
     <a
-      href={getCardUrl()}
-      target="_blank"
-      rel="noopener noreferrer"
+      href={cardUrl}
+      target={isInternalUrl ? "_self" : "_blank"}
+      rel={isInternalUrl ? undefined : "noopener noreferrer"}
       data-media-type={cardType}
       className={`media-card ${theme === "dark" ? "dark" : "light"} block w-full max-w-3xl cursor-pointer rounded-lg bg-muted/20 no-underline transition-all duration-300 hover:bg-muted/30`}
     >
@@ -101,8 +104,9 @@ const MediaCard: React.FC<MediaCardProps> = ({
             <img
               src={posterUrl}
               alt={title}
-              className={`my-0 w-full rounded-md object-cover shadow-sm ${cardType === "music" ? "aspect-square" : "aspect-[2/3]"
-                }`}
+              className={`my-0 w-full rounded-md object-cover shadow-sm ${
+                cardType === "music" ? "aspect-square" : "aspect-[2/3]"
+              }`}
             />
           </div>
         )}

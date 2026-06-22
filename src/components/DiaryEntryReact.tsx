@@ -2,57 +2,11 @@ import React from "react";
 import TimelineItemReact from "./TimelineItemReact";
 import { SITE } from "../config";
 
-// 本地电影数据接口
-interface LocalMovieData {
-  id?: number;
-  title: string;
-  release_date?: string;
-  region?: string;
-  rating?: number;
-  runtime?: number;
-  genres?: string;
-  overview?: string;
-  poster?: string;
-  source?: string;
-  external_url?: string;
-}
+import type { MediaCardData, MediaCardType } from "../types/media";
 
-// 本地TV数据接口
-interface LocalTVData {
-  id?: string;
-  title: string;
-  release_date?: string;
-  region?: string;
-  rating?: number;
-  genres?: string;
-  overview?: string;
-  poster?: string;
-  source?: string;
-  external_url?: string;
-}
-
-// 本地书籍数据接口
-interface LocalBookData {
-  id?: string;
-  title: string;
-  release_date?: string;
-  region?: string;
-  rating?: number;
-  genres?: string;
-  overview?: string;
-  poster?: string;
-  external_url?: string;
-}
-
-// 本地音乐数据接口
-interface LocalMusicData {
-  title: string;
-  author?: string;
-  album?: string;
-  duration?: number;
-  genres?: string;
-  poster?: string;
-  url?: string;
+export interface MediaCardItem {
+  type: MediaCardType;
+  data: MediaCardData;
 }
 
 export interface TimeBlock {
@@ -60,10 +14,7 @@ export interface TimeBlock {
   text?: string;
   images?: Array<{ alt: string; src: string; title?: string }>;
   htmlContent?: string;
-  movieData?: LocalMovieData;
-  tvData?: LocalTVData;
-  bookData?: LocalBookData;
-  musicData?: LocalMusicData;
+  mediaCards?: MediaCardItem[];
 }
 
 export interface DiaryEntryProps {
@@ -182,10 +133,7 @@ const DiaryEntryReact: React.FC<DiaryEntryProps> = ({
             text={block.text}
             images={block.images}
             htmlContent={block.htmlContent}
-            movieData={block.movieData}
-            tvData={block.tvData}
-            bookData={block.bookData}
-            musicData={block.musicData}
+            mediaCards={block.mediaCards}
           />
         ))}
       </div>

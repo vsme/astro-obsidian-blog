@@ -97,7 +97,8 @@ export const remarkRssMediaCard: Plugin<[MediaCardOptions?], Root> = (
       index: number;
       parent: Parent;
       cardType: MediaCardType;
-      mediaData: MediaCardData;
+      mediaData: MediaCardData | null;
+      isHidden: boolean;
     }> = [];
 
     // 第一阶段：收集符合条件的节点
@@ -107,26 +108,33 @@ export const remarkRssMediaCard: Plugin<[MediaCardOptions?], Root> = (
       }
 
       // 检查是否是媒体卡片代码块
-      const cardTypeMatch = node.lang?.match(/^card-(movie|tv|book|music)$/);
+      const cardTypeMatch = node.lang?.match(
+        /^card-(movie|tv|book|music)(:hide)?$/
+      );
       if (!cardTypeMatch) {
         return;
       }
 
       const cardType = cardTypeMatch[1];
-      const mediaData = parseCardContent(node.value, currentFilePath);
+      const isHidden = !!cardTypeMatch[2];
 
-      if (!mediaData) {
-        if (enableDebug) {
-          console.warn(
-            `Failed to parse media data for ${cardType} card:`,
-            node.value
-          );
+      let mediaData = null;
+      if (!isHidden) {
+        mediaData = parseCardContent(node.value, currentFilePath);
+
+        if (!mediaData) {
+          if (enableDebug) {
+            console.warn(
+              `Failed to parse media data for ${cardType} card:`,
+              node.value
+            );
+          }
+          return;
         }
-        return;
-      }
 
-      if (enableDebug) {
-        console.log(`Found ${cardType} card:`, mediaData.title);
+        if (enableDebug) {
+          console.log(`Found ${cardType} card:`, mediaData.title);
+        }
       }
 
       nodesToProcess.push({
@@ -135,12 +143,21 @@ export const remarkRssMediaCard: Plugin<[MediaCardOptions?], Root> = (
         parent,
         cardType: cardType as MediaCardType,
         mediaData,
+        isHidden,
       });
     });
 
     // 第二阶段：处理收集到的节点（从后往前处理以避免索引问题）
     for (let i = nodesToProcess.length - 1; i >= 0; i--) {
-      const { index, parent, cardType, mediaData } = nodesToProcess[i];
+      const { index, parent, cardType, mediaData, isHidden } =
+        nodesToProcess[i];
+
+      if (isHidden) {
+        parent.children.splice(index, 1);
+        continue;
+      }
+
+      if (!mediaData) continue;
 
       try {
         // 获取链接URL

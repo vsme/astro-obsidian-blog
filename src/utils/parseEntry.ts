@@ -6,6 +6,7 @@ import { getVideoPath } from "@/utils/videoUtils";
 import { processLink } from "@/utils/linkProcessor";
 import { extractUrl, extractImplicitPoster } from "@/utils/urlExtractor";
 import type { CollectionEntry } from "astro:content";
+import type { MediaCardData, MediaCardType } from "@/types/media";
 
 // 通用的poster路径优化函数
 async function optimizePosterPath(
@@ -21,59 +22,6 @@ async function optimizePosterPath(
     // 失败时使用原始路径
     return posterPath;
   }
-}
-
-// 本地电影数据接口
-interface LocalMovieData {
-  id?: number;
-  title: string;
-  release_date?: string;
-  region?: string;
-  rating?: number;
-  runtime?: number;
-  genres?: string;
-  overview?: string;
-  poster?: string;
-  source?: string;
-  external_url?: string;
-}
-
-// 本地TV数据接口
-interface LocalTVData {
-  id?: string;
-  title: string;
-  release_date?: string;
-  region?: string;
-  rating?: number;
-  genres?: string;
-  overview?: string;
-  poster?: string;
-  source?: string;
-  external_url?: string;
-}
-
-// 本地书籍数据接口
-interface LocalBookData {
-  id?: string;
-  title: string;
-  release_date?: string;
-  author?: string;
-  rating?: number;
-  genres?: string;
-  overview?: string;
-  poster?: string;
-  external_url?: string;
-}
-
-// 本地音乐数据接口
-interface LocalMusicData {
-  title: string;
-  author?: string;
-  album?: string;
-  duration?: number;
-  genres?: string;
-  poster?: string;
-  url?: string;
 }
 
 // 解析日记条目的函数
@@ -262,74 +210,28 @@ export async function parseEntry(entry: CollectionEntry<"diary">) {
       }
     }
 
-    // 提取电影卡片数据
-    let movieData: LocalMovieData | undefined = undefined;
-    const cardMovieMatches = blockContent.match(/```card-movie([\s\S]*?)```/);
-    if (cardMovieMatches) {
-      const cardContent = cardMovieMatches[1].trim();
+    // 统一提取所有类型的媒体卡片数据
+    const mediaCards: Array<{ type: MediaCardType; data: MediaCardData }> = [];
+    const cardMatches = [
+      ...blockContent.matchAll(
+        /```card-(movie|tv|book|music)(:hide)?([\s\S]*?)```/g
+      ),
+    ];
 
-      // 解析电影信息
-      const parseField = (field: string): string | undefined => {
-        const match = cardContent.match(new RegExp(`${field}:\\s*(.+)`, "m"));
-        let value = match ? match[1].trim() : undefined;
-        if (
-          value &&
-          (field === "poster" ||
-            field === "external_url" ||
-            field === "url" ||
-            field === "douban_url")
-        ) {
-          value = extractUrl(value);
-          if (field !== "poster") {
-            if (
-              !value.match(/^https?:\/\//i) &&
-              !value.match(/\.[a-zA-Z0-9]+$/)
-            ) {
-              value += ".md";
-            }
-            value = processLink(value);
-          }
-        }
-        return value;
-      };
+    for (const match of cardMatches) {
+      const type = match[1] as MediaCardType;
+      const isHidden = !!match[2];
+      const cardContent = match[3].trim();
 
-      const parseNumber = (field: string): number | undefined => {
-        const value = parseField(field);
-        return value ? parseFloat(value) : undefined;
-      };
-
-      const title = parseField("title");
-      if (title) {
-        const posterStr =
-          parseField("poster") || extractImplicitPoster(cardContent);
-        const optimizedPoster = await optimizePosterPath(posterStr);
-
-        movieData = {
-          id: parseNumber("id"),
-          title,
-          release_date: parseField("release_date"),
-          region: parseField("region"),
-          rating: parseNumber("rating"),
-          runtime: parseNumber("runtime"),
-          genres: parseField("genres"),
-          overview: parseField("overview"),
-          poster: optimizedPoster,
-          source: parseField("source"),
-          external_url: parseField("external_url"),
-        };
+      if (isHidden) {
+        continue;
       }
-    }
 
-    // 提取TV剧集卡片数据
-    let tvData: LocalTVData | undefined = undefined;
-    const cardTVMatches = blockContent.match(/```card-tv([\s\S]*?)```/);
-    if (cardTVMatches) {
-      const cardContent = cardTVMatches[1].trim();
-
-      // 解析TV信息
       const parseField = (field: string): string | undefined => {
-        const match = cardContent.match(new RegExp(`${field}:\\s*(.+)`, "m"));
-        let value = match ? match[1].trim() : undefined;
+        const fieldMatch = cardContent.match(
+          new RegExp(`${field}:\\s*(.+)`, "m")
+        );
+        let value = fieldMatch ? fieldMatch[1].trim() : undefined;
         if (
           value &&
           (field === "poster" ||
@@ -362,128 +264,66 @@ export async function parseEntry(entry: CollectionEntry<"diary">) {
           parseField("poster") || extractImplicitPoster(cardContent);
         const optimizedPoster = await optimizePosterPath(posterStr);
 
-        tvData = {
-          id: parseField("id"),
+        const baseData = {
           title,
-          release_date: parseField("release_date"),
-          region: parseField("region"),
-          rating: parseNumber("rating"),
-          genres: parseField("genres"),
-          overview: parseField("overview"),
           poster: optimizedPoster,
-          source: parseField("source"),
-          external_url: parseField("external_url"),
+          genres: parseField("genres"),
         };
-      }
-    }
 
-    // 提取书籍卡片数据
-    let bookData: LocalBookData | undefined = undefined;
-    const cardBookMatches = blockContent.match(/```card-book([\s\S]*?)```/);
-    if (cardBookMatches) {
-      const cardContent = cardBookMatches[1].trim();
-
-      // 解析书籍信息
-      const parseField = (field: string): string | undefined => {
-        const match = cardContent.match(new RegExp(`${field}:\\s*(.+)`, "m"));
-        let value = match ? match[1].trim() : undefined;
-        if (
-          value &&
-          (field === "poster" ||
-            field === "external_url" ||
-            field === "url" ||
-            field === "douban_url")
-        ) {
-          value = extractUrl(value);
-          if (field !== "poster") {
-            if (
-              !value.match(/^https?:\/\//i) &&
-              !value.match(/\.[a-zA-Z0-9]+$/)
-            ) {
-              value += ".md";
-            }
-            value = processLink(value);
-          }
+        if (type === "movie") {
+          mediaCards.push({
+            type,
+            data: {
+              ...baseData,
+              id: parseNumber("id"),
+              release_date: parseField("release_date"),
+              region: parseField("region"),
+              rating: parseNumber("rating"),
+              runtime: parseNumber("runtime"),
+              overview: parseField("overview"),
+              source: parseField("source"),
+              external_url: parseField("external_url"),
+            },
+          });
+        } else if (type === "tv") {
+          mediaCards.push({
+            type,
+            data: {
+              ...baseData,
+              id: parseField("id"),
+              release_date: parseField("release_date"),
+              region: parseField("region"),
+              rating: parseNumber("rating"),
+              overview: parseField("overview"),
+              source: parseField("source"),
+              external_url: parseField("external_url"),
+            },
+          });
+        } else if (type === "book") {
+          mediaCards.push({
+            type,
+            data: {
+              ...baseData,
+              id: parseField("id"),
+              release_date: parseField("release_date"),
+              author: parseField("author"),
+              rating: parseNumber("rating"),
+              overview: parseField("overview"),
+              external_url: parseField("external_url"),
+            },
+          });
+        } else if (type === "music") {
+          mediaCards.push({
+            type,
+            data: {
+              ...baseData,
+              author: parseField("author"),
+              album: parseField("album"),
+              duration: parseNumber("duration"),
+              url: parseField("url"),
+            },
+          });
         }
-        return value;
-      };
-
-      const parseNumber = (field: string): number | undefined => {
-        const value = parseField(field);
-        return value ? parseFloat(value) : undefined;
-      };
-
-      const title = parseField("title");
-      if (title) {
-        const posterStr =
-          parseField("poster") || extractImplicitPoster(cardContent);
-        const optimizedPoster = await optimizePosterPath(posterStr);
-
-        bookData = {
-          id: parseField("id"),
-          title,
-          release_date: parseField("release_date"),
-          author: parseField("author"),
-          rating: parseNumber("rating"),
-          genres: parseField("genres"),
-          overview: parseField("overview"),
-          poster: optimizedPoster,
-          external_url: parseField("external_url"),
-        };
-      }
-    }
-
-    // 提取音乐卡片数据
-    let musicData: LocalMusicData | undefined = undefined;
-    const cardMusicMatches = blockContent.match(/```card-music([\s\S]*?)```/);
-    if (cardMusicMatches) {
-      const cardContent = cardMusicMatches[1].trim();
-
-      // 解析音乐信息
-      const parseField = (field: string): string | undefined => {
-        const match = cardContent.match(new RegExp(`${field}:\\s*(.+)`, "m"));
-        let value = match ? match[1].trim() : undefined;
-        if (
-          value &&
-          (field === "poster" ||
-            field === "external_url" ||
-            field === "url" ||
-            field === "douban_url")
-        ) {
-          value = extractUrl(value);
-          if (field !== "poster") {
-            if (
-              !value.match(/^https?:\/\//i) &&
-              !value.match(/\.[a-zA-Z0-9]+$/)
-            ) {
-              value += ".md";
-            }
-            value = processLink(value);
-          }
-        }
-        return value;
-      };
-
-      const parseNumber = (field: string): number | undefined => {
-        const value = parseField(field);
-        return value ? parseFloat(value) : undefined;
-      };
-
-      const title = parseField("title");
-      if (title) {
-        const posterStr =
-          parseField("poster") || extractImplicitPoster(cardContent);
-        const optimizedPoster = await optimizePosterPath(posterStr);
-
-        musicData = {
-          title,
-          author: parseField("author"),
-          album: parseField("album"),
-          duration: parseNumber("duration"),
-          genres: parseField("genres"),
-          poster: optimizedPoster,
-          url: parseField("url"),
-        };
       }
     }
 
@@ -540,24 +380,13 @@ export async function parseEntry(entry: CollectionEntry<"diary">) {
       text = text.replace(`++HTML_BLOCK_${index}++`, block);
     });
 
-    if (
-      text ||
-      images.length > 0 ||
-      htmlContent ||
-      movieData ||
-      tvData ||
-      bookData ||
-      musicData
-    ) {
+    if (text || images.length > 0 || htmlContent || mediaCards.length > 0) {
       timeBlocks.push({
         time,
         text,
         images,
         htmlContent,
-        movieData,
-        tvData,
-        bookData,
-        musicData,
+        mediaCards: mediaCards.length > 0 ? mediaCards : undefined,
       });
     }
   }

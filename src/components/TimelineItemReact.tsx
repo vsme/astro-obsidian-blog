@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import MediaCard from "./MediaCard";
 import EmojiReactions from "./EmojiReactions";
-import type { MediaCardData } from "../types/media";
+import type { MediaCardItem } from "./DiaryEntryReact";
 import { SUPABASE_URL, SUPABASE_KEY } from "astro:env/client";
 
 // 导入 lightgallery 样式
@@ -21,22 +21,16 @@ export interface TimelineItemProps {
     height?: number;
   }>;
   htmlContent?: string;
-  movieData?: MediaCardData;
-  tvData?: MediaCardData;
-  bookData?: MediaCardData;
-  musicData?: MediaCardData;
+  mediaCards?: MediaCardItem[];
 }
 
 const TimelineItemReact: React.FC<TimelineItemProps> = ({
   time,
   date,
   text,
-  images,
+  images = [],
   htmlContent,
-  movieData,
-  tvData,
-  bookData,
-  musicData,
+  mediaCards,
 }) => {
   const galleryRef = useRef<HTMLDivElement>(null);
   const lightGalleryRef = useRef<{ destroy: () => void } | null>(null);
@@ -241,41 +235,17 @@ const TimelineItemReact: React.FC<TimelineItemProps> = ({
                 />
               )}
 
-              {movieData && (
-                <section
-                  className="movie-card-container mb-4 px-0"
-                  aria-label="电影信息"
-                >
-                  <MediaCard mediaData={movieData} cardType="movie" />
-                </section>
-              )}
-
-              {tvData && (
-                <section
-                  className="tv-card-container mb-4 px-0"
-                  aria-label="电视剧信息"
-                >
-                  <MediaCard mediaData={tvData} cardType="tv" />
-                </section>
-              )}
-
-              {bookData && (
-                <section
-                  className="book-card-container mb-4 px-0"
-                  aria-label="书籍信息"
-                >
-                  <MediaCard mediaData={bookData} cardType="book" />
-                </section>
-              )}
-
-              {musicData && (
-                <section
-                  className="music-card-container mb-4 px-0"
-                  aria-label="音乐信息"
-                >
-                  <MediaCard mediaData={musicData} cardType="music" />
-                </section>
-              )}
+              {mediaCards &&
+                mediaCards.length > 0 &&
+                mediaCards.map((card, index) => (
+                  <section
+                    key={`${card.type}-${card.data.id || index}`}
+                    className={`${card.type}-card-container mb-4 px-0`}
+                    aria-label={`${card.type === "movie" ? "电影" : card.type === "tv" ? "电视剧" : card.type === "book" ? "书籍" : "音乐"}信息`}
+                  >
+                    <MediaCard mediaData={card.data} cardType={card.type} />
+                  </section>
+                ))}
 
               {/* 表情组件 */}
               {SUPABASE_URL && SUPABASE_KEY && (

@@ -9,61 +9,230 @@ interface Props {
   };
 }
 
-interface Particle {
-  homeX: number;
-  homeY: number;
-  width: number;
-  height: number;
-  x: number;
-  y: number;
-  velocityX: number;
-  velocityY: number;
-  startX: number;
-  startY: number;
-  delay: number;
-  spin: number;
-  phase: number;
-  mobility: number;
-  energy: number;
-  settleAt: number;
-}
-
-interface Swipe {
+interface Trail {
   fromX: number;
   fromY: number;
   x: number;
   y: number;
   deltaX: number;
   deltaY: number;
+  createdAt: number;
+  speed: number;
 }
 
-interface Segment {
-  start: number;
-  size: number;
+interface PointerPosition {
+  x: number;
+  y: number;
+  time: number;
+}
+
+interface Uniforms {
+  image: WebGLUniformLocation;
+  imageSize: WebGLUniformLocation;
+  surfaceSize: WebGLUniformLocation;
+  bleed: WebGLUniformLocation;
+  time: WebGLUniformLocation;
+  introTime: WebGLUniformLocation;
+  radius: WebGLUniformLocation;
+  mode: WebGLUniformLocation;
+  trailCount: WebGLUniformLocation;
+  trails: WebGLUniformLocation;
+  trailMotion: WebGLUniformLocation;
 }
 
 type AnimationMode = "idle" | "intro" | "interactive";
 
+const MAX_TRAILS = 18;
 const INTRO_DURATION = 900;
 const INTRO_STAGGER = 520;
 const INTRO_TOTAL = INTRO_DURATION + INTRO_STAGGER + 80;
+const TRAIL_LIFETIME = 860;
 
 const clamp = (value: number, min: number, max: number) =>
   Math.min(max, Math.max(min, value));
 
-const random = (seed: number) => {
-  const value = Math.sin(seed * 12.9898) * 43758.5453;
-  return value - Math.floor(value);
+const VERTEX_SHADER = `#version 300 es
+precision highp float;
+
+const int MAX_TRAILS = ${MAX_TRAILS};
+
+uniform vec2 uImageSize;
+uniform vec2 uSurfaceSize;
+uniform float uBleed;
+uniform float uTime;
+uniform float uIntroTime;
+uniform float uRadius;
+uniform int uMode;
+uniform int uTrailCount;
+uniform vec4 uTrails[MAX_TRAILS];
+uniform vec4 uTrailMotion[MAX_TRAILS];
+
+out vec2 vUv;
+out float vOpacity;
+
+float hash(vec2 point) {
+  return fract(sin(dot(point, vec2(127.1, 311.7))) * 43758.5453123);
+}
+
+float backOut(float progress) {
+  const float overshoot = 1.45;
+  float shifted = progress - 1.0;
+  return 1.0 + (overshoot + 1.0) * shifted * shifted * shifted +
+    overshoot * shifted * shifted;
+}
+
+float softBound(float value, float negativeLimit, float positiveLimit) {
+  if (value < 0.0) {
+    return -negativeLimit * tanh((-value) / max(negativeLimit, 1.0));
+  }
+  return positiveLimit * tanh(value / max(positiveLimit, 1.0));
+}
+
+void main() {
+  int imageWidth = int(uImageSize.x);
+  float homeX = float(gl_VertexID % imageWidth);
+  float homeY = float(gl_VertexID / imageWidth);
+  vec2 home = vec2(homeX, homeY);
+  vec2 displacement = vec2(0.0);
+  vOpacity = 1.0;
+
+  float seed = hash(home + vec2(0.37, 0.73));
+  float phase = hash(home + vec2(19.17, 7.31)) * 6.28318530718;
+  float mobility = mix(0.72, 1.30, hash(home + vec2(37.0, 53.0)));
+  float spinField = sin(home.x * 0.026 + home.y * 0.038 +
+    hash(floor(home.y / 10.0) + vec2(127.0)) * 1.8);
+  float spin = spinField >= 0.0 ? 1.0 : -1.0;
+
+  if (uMode == 0) {
+    float angle = seed * 6.28318530718;
+    float distanceFromHome = 14.0 + hash(home + vec2(31.0)) * 38.0;
+    vec2 startOffset = vec2(cos(angle), sin(angle)) * distanceFromHome;
+    float delay = (home.x / max(uImageSize.x - 1.0, 1.0)) * 0.52 +
+      hash(home + vec2(97.0)) * 0.08;
+    float progress = clamp((uIntroTime - delay) / 0.9, 0.0, 1.0);
+    displacement = startOffset * (1.0 - backOut(progress));
+    vOpacity = clamp(progress * 2.2, 0.0, 1.0);
+  } else {
+    for (int index = 0; index < MAX_TRAILS; index += 1) {
+      if (index >= uTrailCount) break;
+
+      vec4 trail = uTrails[index];
+      vec4 motion = uTrailMotion[index];
+      vec2 segment = trail.zw - trail.xy;
+      float segmentLengthSquared = dot(segment, segment);
+      if (segmentLengthSquared < 0.0001) continue;
+
+      float projection = clamp(
+        dot(home - trail.xy, segment) / segmentLengthSquared,
+        0.0,
+        1.0
+      );
+      vec2 closest = trail.xy + segment * projection;
+      vec2 offset = home - closest;
+      float distanceToTrail = length(offset);
+      float localRadius = uRadius * mix(0.90, 1.08, seed);
+      if (distanceToTrail >= localRadius) continue;
+
+      float age = max(0.0, uTime - motion.z);
+      if (age > ${TRAIL_LIFETIME / 1000}) continue;
+
+      float proximity = 1.0 - distanceToTrail / localRadius;
+      float influence = proximity * proximity * (3.0 - 2.0 * proximity);
+      float life = exp(-age * 4.8);
+      float speed = motion.w;
+      float speedRatio = clamp(speed / 20.0, 0.0, 1.0);
+      vec2 tangent = normalize(segment);
+      vec2 normal = vec2(-tangent.y, tangent.x);
+      vec2 radial = distanceToTrail > 0.001
+        ? offset / distanceToTrail
+        : normal * spin;
+      float signedSide = dot(offset, normal);
+      float side = abs(signedSide) < 0.001 ? spin : sign(signedSide);
+      float ripple = sin(phase + projection * 5.0 + speedRatio * 0.8);
+      float curl = spin * 0.30 + side * 0.32 + ripple * 0.22;
+      float strength = (4.20 + speed * 1.25) * influence * mobility * life;
+
+      displacement += (
+        tangent * (0.72 + speedRatio * 0.22) +
+        radial * 0.32 +
+        normal * curl
+      ) * strength;
+    }
+  }
+
+  vec2 basePosition = vec2(uBleed) + home;
+  float leftLimit = max(basePosition.x - 1.0, 1.0);
+  float rightLimit = max(uSurfaceSize.x - basePosition.x - 2.0, 1.0);
+  float topLimit = max(basePosition.y - 1.0, 1.0);
+  float bottomLimit = max(uSurfaceSize.y - basePosition.y - 2.0, 1.0);
+  displacement.x = softBound(displacement.x, leftLimit, rightLimit);
+  displacement.y = softBound(displacement.y, topLimit, bottomLimit);
+
+  vec2 canvasPosition = basePosition + displacement + vec2(0.5);
+  vec2 clipPosition = vec2(
+    canvasPosition.x / uSurfaceSize.x * 2.0 - 1.0,
+    1.0 - canvasPosition.y / uSurfaceSize.y * 2.0
+  );
+
+  gl_Position = vec4(clipPosition, 0.0, 1.0);
+  gl_PointSize = 1.0;
+  vUv = (home + vec2(0.5)) / uImageSize;
+}
+`;
+
+const FRAGMENT_SHADER = `#version 300 es
+precision highp float;
+
+uniform sampler2D uImage;
+
+in vec2 vUv;
+in float vOpacity;
+out vec4 outColor;
+
+void main() {
+  vec4 color = texture(uImage, vUv);
+  if (color.a <= 0.001 || vOpacity <= 0.001) discard;
+  outColor = vec4(color.rgb, color.a * vOpacity);
+}
+`;
+
+const createShader = (
+  gl: WebGL2RenderingContext,
+  type: number,
+  source: string
+) => {
+  const shader = gl.createShader(type);
+  if (!shader) throw new Error("Unable to create WebGL shader");
+
+  gl.shaderSource(shader, source);
+  gl.compileShader(shader);
+  if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+    const message = gl.getShaderInfoLog(shader) || "Unknown shader error";
+    gl.deleteShader(shader);
+    throw new Error(message);
+  }
+  return shader;
 };
 
-const backOut = (progress: number) => {
-  const overshoot = 1.45;
-  const shifted = progress - 1;
-  return 1 + (overshoot + 1) * shifted ** 3 + overshoot * shifted ** 2;
-};
+const createProgram = (gl: WebGL2RenderingContext) => {
+  const vertexShader = createShader(gl, gl.VERTEX_SHADER, VERTEX_SHADER);
+  const fragmentShader = createShader(gl, gl.FRAGMENT_SHADER, FRAGMENT_SHADER);
+  const program = gl.createProgram();
+  if (!program) throw new Error("Unable to create WebGL program");
 
-const buildSegments = (length: number): Segment[] =>
-  Array.from({ length }, (_, start) => ({ start, size: 1 }));
+  gl.attachShader(program, vertexShader);
+  gl.attachShader(program, fragmentShader);
+  gl.linkProgram(program);
+  gl.deleteShader(vertexShader);
+  gl.deleteShader(fragmentShader);
+
+  if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+    const message = gl.getProgramInfoLog(program) || "Unknown link error";
+    gl.deleteProgram(program);
+    throw new Error(message);
+  }
+  return program;
+};
 
 const DisintegrationImg: React.FC<Props> = ({ image }) => {
   const imgRef = useRef<HTMLImageElement>(null);
@@ -76,139 +245,123 @@ const DisintegrationImg: React.FC<Props> = ({ image }) => {
     const container = containerRef.current;
     if (!img || !canvas || !container) return;
 
-    const context = canvas.getContext("2d", {
-      alpha: true,
-      desynchronized: true,
-      willReadFrequently: true,
-    });
-    if (!context) return;
-
     const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
-    let particles: Particle[] = [];
-    const activeParticles = new Set<Particle>();
-    let sourcePixels: Uint8ClampedArray | null = null;
-    let frameImageData: ImageData | null = null;
+    const gl = canvas.getContext("webgl2", {
+      alpha: true,
+      antialias: false,
+      depth: false,
+      stencil: false,
+      preserveDrawingBuffer: false,
+      powerPreference: "high-performance",
+    });
+    if (!gl) return;
+
+    let program: WebGLProgram | null = null;
+    let texture: WebGLTexture | null = null;
+    let vertexArray: WebGLVertexArrayObject | null = null;
+    let uniforms: Uniforms | null = null;
     let mode: AnimationMode = "idle";
     let frameId = 0;
     let resizeFrameId = 0;
     let introStartedAt = 0;
-    let lastFrameAt = 0;
     let lastInteractionAt = 0;
-    let previousPointer: { x: number; y: number } | null = null;
-    let pendingSwipe: Swipe | null = null;
+    let previousPointer: PointerPosition | null = null;
     let width = 0;
     let height = 0;
     let bleed = 0;
     let surfaceWidth = 0;
     let surfaceHeight = 0;
-    let boundarySoftness = 0;
+    let canvasVisible = false;
+    let resourcesReady = false;
+    let disposed = false;
+    const clockStartedAt = performance.now();
+    const trails: Trail[] = [];
+    const trailCoordinates = new Float32Array(MAX_TRAILS * 4);
+    const trailMotion = new Float32Array(MAX_TRAILS * 4);
 
-    const blitParticle = (particle: Particle, opacity = 1) => {
-      if (!sourcePixels || !frameImageData || opacity <= 0) return;
-
-      const sourceX = bleed + particle.homeX;
-      const sourceY = bleed + particle.homeY;
-      const destinationX = Math.round(sourceX + particle.x);
-      const destinationY = Math.round(sourceY + particle.y);
-      const framePixels = frameImageData.data;
-
-      for (let row = 0; row < particle.height; row += 1) {
-        const targetY = destinationY + row;
-        if (targetY < 0 || targetY >= surfaceHeight) continue;
-
-        for (let column = 0; column < particle.width; column += 1) {
-          const targetX = destinationX + column;
-          if (targetX < 0 || targetX >= surfaceWidth) continue;
-
-          const sourceOffset =
-            ((sourceY + row) * surfaceWidth + sourceX + column) * 4;
-          const targetOffset = (targetY * surfaceWidth + targetX) * 4;
-          framePixels[targetOffset] = sourcePixels[sourceOffset];
-          framePixels[targetOffset + 1] = sourcePixels[sourceOffset + 1];
-          framePixels[targetOffset + 2] = sourcePixels[sourceOffset + 2];
-          framePixels[targetOffset + 3] = Math.round(
-            sourcePixels[sourceOffset + 3] * opacity
-          );
-        }
-      }
+    const hideCanvas = () => {
+      canvasVisible = false;
+      canvas.style.opacity = "0";
+      img.style.opacity = "1";
     };
 
-    const clearParticleHome = (particle: Particle) => {
-      if (!frameImageData) return;
-      const framePixels = frameImageData.data;
-      const startX = bleed + particle.homeX;
-      const startY = bleed + particle.homeY;
-
-      for (let row = 0; row < particle.height; row += 1) {
-        for (let column = 0; column < particle.width; column += 1) {
-          const offset = ((startY + row) * surfaceWidth + startX + column) * 4;
-          framePixels[offset] = 0;
-          framePixels[offset + 1] = 0;
-          framePixels[offset + 2] = 0;
-          framePixels[offset + 3] = 0;
-        }
-      }
-    };
-
-    const presentFrame = () => {
-      if (frameImageData) context.putImageData(frameImageData, 0, 0);
-    };
-
-    const renderIntro = (now: number) => {
-      if (!frameImageData) return;
-      frameImageData.data.fill(0);
-      const elapsed = now - introStartedAt;
-
-      particles.forEach(particle => {
-        const progress = clamp(
-          (elapsed - particle.delay) / INTRO_DURATION,
-          0,
-          1
-        );
-        const eased = backOut(progress);
-        particle.x = particle.startX * (1 - eased);
-        particle.y = particle.startY * (1 - eased);
-        blitParticle(particle, clamp(progress * 2.2, 0, 1));
-      });
-      presentFrame();
-    };
-
-    const isMoving = (particle: Particle) =>
-      Math.abs(particle.x) > 0.04 ||
-      Math.abs(particle.y) > 0.04 ||
-      Math.abs(particle.velocityX) > 0.04 ||
-      Math.abs(particle.velocityY) > 0.04;
-
-    const renderInteractive = () => {
-      if (!sourcePixels || !frameImageData) return;
-      frameImageData.data.set(sourcePixels);
-      activeParticles.forEach(clearParticleHome);
-      activeParticles.forEach(particle => blitParticle(particle));
-      presentFrame();
-    };
-
-    const resetParticles = () => {
-      particles.forEach(particle => {
-        particle.x = 0;
-        particle.y = 0;
-        particle.velocityX = 0;
-        particle.velocityY = 0;
-        particle.energy = 0;
-        particle.settleAt = 0;
-      });
-      activeParticles.clear();
+    const showCanvas = () => {
+      canvasVisible = true;
+      canvas.style.opacity = "1";
+      img.style.opacity = "0";
     };
 
     const setIdle = () => {
       mode = "idle";
-      pendingSwipe = null;
-      lastFrameAt = 0;
-      resetParticles();
-      img.style.opacity = "1";
-      canvas.style.opacity = "0";
+      trails.length = 0;
+      previousPointer = null;
+      hideCanvas();
     };
 
-    const buildParticles = () => {
+    const failSafe = () => {
+      if (frameId) window.cancelAnimationFrame(frameId);
+      frameId = 0;
+      resourcesReady = false;
+      setIdle();
+    };
+
+    const getUniform = (nextProgram: WebGLProgram, name: string) => {
+      const location = gl.getUniformLocation(nextProgram, name);
+      if (location === null) throw new Error(`Missing WebGL uniform: ${name}`);
+      return location;
+    };
+
+    const destroyResources = () => {
+      if (gl.isContextLost()) return;
+      if (texture) gl.deleteTexture(texture);
+      if (vertexArray) gl.deleteVertexArray(vertexArray);
+      if (program) gl.deleteProgram(program);
+      texture = null;
+      vertexArray = null;
+      program = null;
+      uniforms = null;
+      resourcesReady = false;
+    };
+
+    const createResources = () => {
+      destroyResources();
+      const nextProgram = createProgram(gl);
+      const nextTexture = gl.createTexture();
+      const nextVertexArray = gl.createVertexArray();
+      if (!nextTexture || !nextVertexArray) {
+        gl.deleteProgram(nextProgram);
+        throw new Error("Unable to allocate WebGL resources");
+      }
+
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, nextTexture);
+      gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, 0);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
+
+      program = nextProgram;
+      texture = nextTexture;
+      vertexArray = nextVertexArray;
+      uniforms = {
+        image: getUniform(nextProgram, "uImage"),
+        imageSize: getUniform(nextProgram, "uImageSize"),
+        surfaceSize: getUniform(nextProgram, "uSurfaceSize"),
+        bleed: getUniform(nextProgram, "uBleed"),
+        time: getUniform(nextProgram, "uTime"),
+        introTime: getUniform(nextProgram, "uIntroTime"),
+        radius: getUniform(nextProgram, "uRadius"),
+        mode: getUniform(nextProgram, "uMode"),
+        trailCount: getUniform(nextProgram, "uTrailCount"),
+        trails: getUniform(nextProgram, "uTrails[0]"),
+        trailMotion: getUniform(nextProgram, "uTrailMotion[0]"),
+      };
+      resourcesReady = true;
+    };
+
+    const updateSurface = () => {
       const bounds = container.getBoundingClientRect();
       if (bounds.width <= 0 || bounds.height <= 0) return false;
 
@@ -217,7 +370,6 @@ const DisintegrationImg: React.FC<Props> = ({ image }) => {
       bleed = Math.round(clamp(width * 0.08, 36, 64));
       surfaceWidth = width + bleed * 2;
       surfaceHeight = height + bleed * 2;
-      boundarySoftness = Math.round(clamp(bleed * 0.36, 14, 22));
 
       canvas.width = surfaceWidth;
       canvas.height = surfaceHeight;
@@ -225,160 +377,73 @@ const DisintegrationImg: React.FC<Props> = ({ image }) => {
       canvas.style.height = `${surfaceHeight}px`;
       canvas.style.left = `${-bleed}px`;
       canvas.style.top = `${-bleed}px`;
-      context.clearRect(0, 0, surfaceWidth, surfaceHeight);
-      context.imageSmoothingEnabled = true;
-      context.imageSmoothingQuality = "high";
-      context.drawImage(img, bleed, bleed, width, height);
-
-      try {
-        const sourceImageData = context.getImageData(
-          0,
-          0,
-          surfaceWidth,
-          surfaceHeight
-        );
-        sourcePixels = new Uint8ClampedArray(sourceImageData.data);
-        frameImageData = context.createImageData(surfaceWidth, surfaceHeight);
-      } catch {
-        sourcePixels = null;
-        frameImageData = null;
-        return false;
-      }
-
-      const horizontalSegments = buildSegments(width);
-      const verticalSegments = buildSegments(height);
-      const nextParticles: Particle[] = [];
-
-      verticalSegments.forEach((vertical, row) => {
-        horizontalSegments.forEach((horizontal, column) => {
-          const index = row * horizontalSegments.length + column;
-          const angle = random(index + 1) * Math.PI * 2;
-          const distance = 14 + random(index + 31) * 38;
-          nextParticles.push({
-            homeX: horizontal.start,
-            homeY: vertical.start,
-            width: horizontal.size,
-            height: vertical.size,
-            x: 0,
-            y: 0,
-            velocityX: 0,
-            velocityY: 0,
-            startX: Math.cos(angle) * distance,
-            startY: Math.sin(angle) * distance,
-            delay:
-              (horizontal.start / Math.max(1, width)) * INTRO_STAGGER +
-              random(index + 97) * 80,
-            // Neighbouring fragments share a broad curl direction, while their
-            // phase and mobility keep the wake from moving like a rigid brush.
-            spin:
-              Math.sin(
-                horizontal.start * 0.026 +
-                  vertical.start * 0.038 +
-                  random(row + 127) * 1.8
-              ) >= 0
-                ? 1
-                : -1,
-            phase: random(index + 157) * Math.PI * 2,
-            mobility: 0.72 + random(index + 181) * 0.58,
-            energy: 0,
-            settleAt: 0,
-          });
-        });
-      });
-
-      particles = nextParticles;
+      gl.viewport(0, 0, surfaceWidth, surfaceHeight);
       return true;
     };
 
-    const applySwipe = (swipe: Swipe) => {
-      const segmentX = swipe.x - swipe.fromX;
-      const segmentY = swipe.y - swipe.fromY;
-      const segmentLengthSquared = segmentX ** 2 + segmentY ** 2;
-      const segmentLength = Math.sqrt(segmentLengthSquared);
-      if (segmentLength < 0.01) return;
+    const uploadTrails = () => {
+      trailCoordinates.fill(0);
+      trailMotion.fill(0);
 
-      const tangentX = segmentX / segmentLength;
-      const tangentY = segmentY / segmentLength;
-      const normalX = -tangentY;
-      const normalY = tangentX;
-      const speed = Math.min(20, Math.hypot(swipe.deltaX, swipe.deltaY));
-      const speedRatio = speed / 20;
-      const influenceRadius = clamp(width * 0.13, 58, 96);
-      const searchPadding = influenceRadius + bleed;
-      const minHomeX = Math.max(
-        0,
-        Math.floor(Math.min(swipe.fromX, swipe.x) - searchPadding)
-      );
-      const maxHomeX = Math.min(
-        width - 1,
-        Math.ceil(Math.max(swipe.fromX, swipe.x) + searchPadding)
-      );
-      const minHomeY = Math.max(
-        0,
-        Math.floor(Math.min(swipe.fromY, swipe.y) - searchPadding)
-      );
-      const maxHomeY = Math.min(
-        height - 1,
-        Math.ceil(Math.max(swipe.fromY, swipe.y) + searchPadding)
-      );
-      const now = performance.now();
+      trails.forEach((trail, index) => {
+        const offset = index * 4;
+        trailCoordinates[offset] = trail.fromX;
+        trailCoordinates[offset + 1] = trail.fromY;
+        trailCoordinates[offset + 2] = trail.x;
+        trailCoordinates[offset + 3] = trail.y;
+        trailMotion[offset] = trail.deltaX;
+        trailMotion[offset + 1] = trail.deltaY;
+        trailMotion[offset + 2] = (trail.createdAt - clockStartedAt) / 1000;
+        trailMotion[offset + 3] = trail.speed;
+      });
+    };
 
-      // With one particle per pixel, scan only the rows around the pointer
-      // trail instead of testing the whole image on every pointer event.
-      for (let homeY = minHomeY; homeY <= maxHomeY; homeY += 1) {
-        const rowOffset = homeY * width;
-        for (let homeX = minHomeX; homeX <= maxHomeX; homeX += 1) {
-          const particle = particles[rowOffset + homeX];
-          const centerX = particle.homeX + 0.5 + particle.x;
-          const centerY = particle.homeY + 0.5 + particle.y;
-          const projection = clamp(
-            ((centerX - swipe.fromX) * segmentX +
-              (centerY - swipe.fromY) * segmentY) /
-              segmentLengthSquared,
-            0,
-            1
-          );
-          const closestX = swipe.fromX + segmentX * projection;
-          const closestY = swipe.fromY + segmentY * projection;
-          const offsetX = centerX - closestX;
-          const offsetY = centerY - closestY;
-          const distance = Math.hypot(offsetX, offsetY);
-          if (distance >= influenceRadius) continue;
-
-          const proximity = 1 - distance / influenceRadius;
-          const influence = proximity * proximity * (3 - 2 * proximity);
-          const radialX = distance > 0.001 ? offsetX / distance : normalX;
-          const radialY = distance > 0.001 ? offsetY / distance : normalY;
-          const signedSide = offsetX * normalX + offsetY * normalY;
-          const side = signedSide === 0 ? particle.spin : Math.sign(signedSide);
-          const ripple = Math.sin(
-            particle.phase + projection * Math.PI * 1.6 + speedRatio * 0.8
-          );
-          const curl = particle.spin * 0.2 + side * 0.22 + ripple * 0.16;
-          const strength =
-            (1.22 + speed * 0.46) * influence * particle.mobility;
-
-          particle.velocityX +=
-            (tangentX * (0.84 + speedRatio * 0.16) +
-              radialX * 0.2 +
-              normalX * curl) *
-            strength;
-          particle.velocityY +=
-            (tangentY * (0.84 + speedRatio * 0.16) +
-              radialY * 0.2 +
-              normalY * curl) *
-            strength;
-          particle.energy = Math.min(1, particle.energy + influence * 0.72);
-          particle.settleAt = Math.max(
-            particle.settleAt,
-            now +
-              35 +
-              influence * 70 +
-              random(particle.homeX * 3 + particle.homeY + 239) * 55
-          );
-          activeParticles.add(particle);
-        }
+    const renderFrame = (now: number) => {
+      if (
+        !resourcesReady ||
+        !program ||
+        !texture ||
+        !vertexArray ||
+        !uniforms ||
+        gl.isContextLost()
+      ) {
+        return false;
       }
+
+      gl.viewport(0, 0, surfaceWidth, surfaceHeight);
+      gl.disable(gl.DEPTH_TEST);
+      gl.enable(gl.BLEND);
+      gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+      gl.clearColor(0, 0, 0, 0);
+      gl.clear(gl.COLOR_BUFFER_BIT);
+      gl.useProgram(program);
+      gl.bindVertexArray(vertexArray);
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, texture);
+
+      gl.uniform1i(uniforms.image, 0);
+      gl.uniform2f(uniforms.imageSize, width, height);
+      gl.uniform2f(uniforms.surfaceSize, surfaceWidth, surfaceHeight);
+      gl.uniform1f(uniforms.bleed, bleed);
+      gl.uniform1f(uniforms.time, (now - clockStartedAt) / 1000);
+      gl.uniform1f(uniforms.radius, clamp(width * 0.13, 58, 96));
+
+      if (mode === "intro") {
+        gl.uniform1i(uniforms.mode, 0);
+        gl.uniform1f(uniforms.introTime, (now - introStartedAt) / 1000);
+        gl.uniform1i(uniforms.trailCount, 0);
+      } else {
+        uploadTrails();
+        gl.uniform1i(uniforms.mode, 1);
+        gl.uniform1f(uniforms.introTime, 0);
+        gl.uniform1i(uniforms.trailCount, trails.length);
+        gl.uniform4fv(uniforms.trails, trailCoordinates);
+        gl.uniform4fv(uniforms.trailMotion, trailMotion);
+      }
+
+      gl.drawArrays(gl.POINTS, 0, width * height);
+      gl.bindVertexArray(null);
+      return !gl.isContextLost();
     };
 
     const scheduleFrame = () => {
@@ -387,157 +452,78 @@ const DisintegrationImg: React.FC<Props> = ({ image }) => {
 
     const tick = (now: number) => {
       frameId = 0;
+      if (disposed || document.hidden || mode === "idle") return;
 
-      if (mode === "intro") {
-        renderIntro(now);
-        if (now - introStartedAt >= INTRO_TOTAL) {
+      if (mode === "interactive") {
+        while (trails.length && now - trails[0].createdAt > TRAIL_LIFETIME) {
+          trails.shift();
+        }
+        if (!trails.length && now - lastInteractionAt > TRAIL_LIFETIME) {
           setIdle();
           return;
         }
-        scheduleFrame();
+      }
+
+      try {
+        if (!renderFrame(now)) {
+          failSafe();
+          return;
+        }
+      } catch (error) {
+        if (import.meta.env.DEV) {
+          console.warn("[DisintegrationImg] WebGL render failed", error);
+        }
+        failSafe();
         return;
       }
 
-      if (mode !== "interactive") return;
-
-      const frameScale = clamp((now - (lastFrameAt || now)) / 16.667, 0.5, 2);
-      lastFrameAt = now;
-      if (pendingSwipe) {
-        applySwipe(pendingSwipe);
-        pendingSwipe = null;
+      if (!canvasVisible && (mode !== "intro" || now - introStartedAt > 32)) {
+        showCanvas();
       }
 
-      let hasMotion = false;
-      const flowing = now - lastInteractionAt < 90;
-      activeParticles.forEach(particle => {
-        const lingering = flowing || now < particle.settleAt;
-        const spring = lingering ? 0.012 : 0.055;
-        const twist = flowing
-          ? particle.spin * particle.energy * 0.01 * frameScale
-          : 0;
-        const drift = flowing ? particle.energy * 0.008 : 0;
-        const cos = Math.cos(twist);
-        const sin = Math.sin(twist);
-        const velocityX = particle.velocityX;
-        const velocityY = particle.velocityY;
-
-        particle.velocityX = velocityX * cos - velocityY * sin;
-        particle.velocityY = velocityX * sin + velocityY * cos;
-        particle.velocityX +=
-          (-particle.x * spring +
-            Math.cos(particle.phase + now * 0.0017) * drift) *
-          frameScale;
-        particle.velocityY +=
-          (-particle.y * spring +
-            Math.sin(particle.phase * 0.83 + now * 0.0015) * drift) *
-          frameScale;
-
-        const drawX = bleed + particle.homeX + particle.x;
-        const drawY = bleed + particle.homeY + particle.y;
-        const rightGap = surfaceWidth - drawX - particle.width;
-        const bottomGap = surfaceHeight - drawY - particle.height;
-        const boundaryForce = 0.28 * frameScale;
-
-        // An invisible soft edge starts slowing fragments before they reach the
-        // canvas limit, keeping the wake organic instead of making it hit a wall.
-        if (drawX < boundarySoftness) {
-          particle.velocityX +=
-            (1 - clamp(drawX / boundarySoftness, 0, 1)) * boundaryForce;
-        } else if (rightGap < boundarySoftness) {
-          particle.velocityX -=
-            (1 - clamp(rightGap / boundarySoftness, 0, 1)) * boundaryForce;
-        }
-        if (drawY < boundarySoftness) {
-          particle.velocityY +=
-            (1 - clamp(drawY / boundarySoftness, 0, 1)) * boundaryForce;
-        } else if (bottomGap < boundarySoftness) {
-          particle.velocityY -=
-            (1 - clamp(bottomGap / boundarySoftness, 0, 1)) * boundaryForce;
-        }
-
-        // Near-critical damping during the gesture and overdamping on release
-        // preserve the trail while preventing repeated jelly-like oscillation.
-        const damping = lingering ? 0.86 : 0.65;
-        particle.velocityX *= damping ** frameScale;
-        particle.velocityY *= damping ** frameScale;
-        particle.x += particle.velocityX * frameScale;
-        particle.y += particle.velocityY * frameScale;
-
-        const boundaryPadding = 1;
-        const minX = boundaryPadding - bleed - particle.homeX;
-        const maxX =
-          surfaceWidth -
-          boundaryPadding -
-          particle.width -
-          bleed -
-          particle.homeX;
-        const minY = boundaryPadding - bleed - particle.homeY;
-        const maxY =
-          surfaceHeight -
-          boundaryPadding -
-          particle.height -
-          bleed -
-          particle.homeY;
-
-        // The final guard is deliberately low-bounce: it prevents disappearing
-        // pixels without turning the outer edge into a pinball cushion.
-        if (particle.x < minX) {
-          particle.x = minX;
-          if (particle.velocityX < 0) particle.velocityX *= -0.16;
-        } else if (particle.x > maxX) {
-          particle.x = maxX;
-          if (particle.velocityX > 0) particle.velocityX *= -0.16;
-        }
-        if (particle.y < minY) {
-          particle.y = minY;
-          if (particle.velocityY < 0) particle.velocityY *= -0.16;
-        } else if (particle.y > maxY) {
-          particle.y = maxY;
-          if (particle.velocityY > 0) particle.velocityY *= -0.16;
-        }
-
-        particle.energy *= (flowing ? 0.93 : 0.82) ** frameScale;
-
-        if (isMoving(particle) || lingering) {
-          hasMotion = true;
-        } else {
-          particle.x = 0;
-          particle.y = 0;
-          particle.energy = 0;
-          activeParticles.delete(particle);
-        }
-      });
-
-      renderInteractive();
-      if (!hasMotion && now - lastInteractionAt > 320) {
+      if (mode === "intro" && now - introStartedAt >= INTRO_TOTAL) {
         setIdle();
         return;
       }
       scheduleFrame();
     };
 
-    const startIntro = () => {
-      if (!buildParticles() || reducedMotion.matches || document.hidden) {
+    const initialize = () => {
+      if (reducedMotion.matches || document.hidden) {
         setIdle();
-        return;
+        return false;
       }
 
+      try {
+        createResources();
+        return updateSurface();
+      } catch (error) {
+        if (import.meta.env.DEV) {
+          console.warn(
+            "[DisintegrationImg] WebGL initialization failed",
+            error
+          );
+        }
+        failSafe();
+        return false;
+      }
+    };
+
+    const startIntro = () => {
+      if (!initialize()) return;
       mode = "intro";
       introStartedAt = performance.now();
-      renderIntro(introStartedAt);
-      canvas.style.opacity = "1";
-      img.style.opacity = "0";
+      hideCanvas();
       scheduleFrame();
     };
 
     const wakeInteraction = () => {
-      if (mode !== "idle" || !sourcePixels || !frameImageData) return;
-      resetParticles();
-      renderInteractive();
-      canvas.style.opacity = "1";
-      img.style.opacity = "0";
-      mode = "interactive";
-      lastFrameAt = performance.now();
+      if (!resourcesReady || mode === "intro") return;
+      if (mode === "idle") {
+        mode = "interactive";
+        hideCanvas();
+      }
+      scheduleFrame();
     };
 
     const handlePointerMove = (event: PointerEvent) => {
@@ -545,45 +531,55 @@ const DisintegrationImg: React.FC<Props> = ({ image }) => {
         reducedMotion.matches ||
         mode === "intro" ||
         event.pointerType === "touch" ||
-        !sourcePixels ||
-        !frameImageData
+        !resourcesReady
       ) {
         return;
       }
 
       const bounds = container.getBoundingClientRect();
+      if (bounds.width <= 0 || bounds.height <= 0) return;
       const scaleX = width / bounds.width;
       const scaleY = height / bounds.height;
       const x = (event.clientX - bounds.left) * scaleX;
       const y = (event.clientY - bounds.top) * scaleY;
-      const deltaX = previousPointer
-        ? x - previousPointer.x
-        : event.movementX * scaleX;
-      const deltaY = previousPointer
-        ? y - previousPointer.y
-        : event.movementY * scaleY;
-      if (deltaX === 0 && deltaY === 0) return;
+      const now = performance.now();
 
-      pendingSwipe = {
-        fromX: pendingSwipe?.fromX ?? x - deltaX,
-        fromY: pendingSwipe?.fromY ?? y - deltaY,
+      if (!previousPointer) {
+        previousPointer = { x, y, time: now };
+        return;
+      }
+
+      const deltaX = x - previousPointer.x;
+      const deltaY = y - previousPointer.y;
+      const distance = Math.hypot(deltaX, deltaY);
+      if (distance < 0.15) return;
+
+      const frameDuration = Math.max(4, now - previousPointer.time);
+      const speed = clamp(distance / (frameDuration / 16.667), 0, 20);
+      trails.push({
+        fromX: previousPointer.x,
+        fromY: previousPointer.y,
         x,
         y,
-        deltaX: (pendingSwipe?.deltaX ?? 0) + deltaX,
-        deltaY: (pendingSwipe?.deltaY ?? 0) + deltaY,
-      };
-      previousPointer = { x, y };
-      lastInteractionAt = performance.now();
+        deltaX,
+        deltaY,
+        createdAt: now,
+        speed,
+      });
+      if (trails.length > MAX_TRAILS) trails.shift();
+
+      previousPointer = { x, y, time: now };
+      lastInteractionAt = now;
       wakeInteraction();
-      scheduleFrame();
     };
 
     const handlePointerEnter = (event: PointerEvent) => {
-      if (event.pointerType === "touch") return;
+      if (event.pointerType === "touch" || !width || !height) return;
       const bounds = container.getBoundingClientRect();
       previousPointer = {
         x: (event.clientX - bounds.left) * (width / bounds.width),
         y: (event.clientY - bounds.top) * (height / bounds.height),
+        time: performance.now(),
       };
     };
 
@@ -592,10 +588,20 @@ const DisintegrationImg: React.FC<Props> = ({ image }) => {
     };
 
     const handleVisibilityChange = () => {
-      if (document.hidden && mode !== "idle") {
+      if (document.hidden) {
         if (frameId) window.cancelAnimationFrame(frameId);
         frameId = 0;
         setIdle();
+        return;
+      }
+
+      if (
+        !resourcesReady &&
+        !reducedMotion.matches &&
+        img.complete &&
+        img.naturalWidth > 0
+      ) {
+        startIntro();
       }
     };
 
@@ -612,9 +618,32 @@ const DisintegrationImg: React.FC<Props> = ({ image }) => {
         }
         if (frameId) window.cancelAnimationFrame(frameId);
         frameId = 0;
-        buildParticles();
+        if (!updateSurface()) failSafe();
         setIdle();
       });
+    };
+
+    const handleContextLost = (event: Event) => {
+      event.preventDefault();
+      program = null;
+      texture = null;
+      vertexArray = null;
+      uniforms = null;
+      failSafe();
+    };
+
+    const handleContextRestored = () => {
+      if (disposed || !img.complete || !img.naturalWidth) return;
+      try {
+        createResources();
+        updateSurface();
+        setIdle();
+      } catch (error) {
+        if (import.meta.env.DEV) {
+          console.warn("[DisintegrationImg] WebGL restore failed", error);
+        }
+        failSafe();
+      }
     };
 
     const resizeObserver = new ResizeObserver(handleResize);
@@ -627,6 +656,8 @@ const DisintegrationImg: React.FC<Props> = ({ image }) => {
       passive: true,
     });
     container.addEventListener("pointerleave", handlePointerLeave);
+    canvas.addEventListener("webglcontextlost", handleContextLost);
+    canvas.addEventListener("webglcontextrestored", handleContextRestored);
     document.addEventListener("visibilitychange", handleVisibilityChange);
     resizeObserver.observe(container);
 
@@ -637,13 +668,17 @@ const DisintegrationImg: React.FC<Props> = ({ image }) => {
     }
 
     return () => {
+      disposed = true;
       if (frameId) window.cancelAnimationFrame(frameId);
       if (resizeFrameId) window.cancelAnimationFrame(resizeFrameId);
       resizeObserver.disconnect();
+      destroyResources();
       img.removeEventListener("load", handleLoad);
       container.removeEventListener("pointermove", handlePointerMove);
       container.removeEventListener("pointerenter", handlePointerEnter);
       container.removeEventListener("pointerleave", handlePointerLeave);
+      canvas.removeEventListener("webglcontextlost", handleContextLost);
+      canvas.removeEventListener("webglcontextrestored", handleContextRestored);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, [image.height, image.src, image.width]);

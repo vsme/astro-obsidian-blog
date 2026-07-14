@@ -26,6 +26,10 @@ interface PointerPosition {
   time: number;
 }
 
+interface TouchStart extends PointerPosition {
+  pointerId: number;
+}
+
 interface IntroUniforms {
   image: WebGLUniformLocation;
   imageSize: WebGLUniformLocation;
@@ -34,6 +38,11 @@ interface IntroUniforms {
   bleed: WebGLUniformLocation;
   introTime: WebGLUniformLocation;
   introOrigin: WebGLUniformLocation;
+  time: WebGLUniformLocation;
+  radius: WebGLUniformLocation;
+  trailCount: WebGLUniformLocation;
+  trails: WebGLUniformLocation;
+  trailMotion: WebGLUniformLocation;
 }
 
 interface RippleUniforms {
@@ -52,10 +61,12 @@ interface RippleUniforms {
 type AnimationMode = "idle" | "intro" | "interactive";
 
 const MAX_TRAILS = 18;
-const INTRO_TOTAL = 1600;
+const INTRO_TOTAL = 2300;
 const TRAIL_LIFETIME = 1800;
 const TRAIL_SAMPLE_INTERVAL = 38;
 const TRAIL_FORCE_DISTANCE = 18;
+const TOUCH_TAP_MAX_DURATION = 500;
+const TOUCH_TAP_MAX_DISTANCE = 12;
 
 const clamp = (value: number, min: number, max: number) =>
   Math.min(max, Math.max(min, value));
@@ -92,14 +103,122 @@ void main() {
 const INTRO_FRAGMENT_SHADER = `#version 300 es
 precision highp float;
 
+const int MAX_TRAILS = ${MAX_TRAILS};
+
 uniform sampler2D uImage;
 uniform vec2 uImageSize;
 uniform vec4 uCornerRadii;
 uniform float uIntroTime;
 uniform vec2 uIntroOrigin;
+uniform float uTime;
+uniform float uRadius;
+uniform int uTrailCount;
+uniform vec4 uTrails[MAX_TRAILS];
+uniform vec4 uTrailMotion[MAX_TRAILS];
 
 in vec2 vUv;
 out vec4 outColor;
+
+vec2 getPointerDistortion(vec2 imagePosition) {
+  vec2 pointerDistortion = vec2(0.0);
+
+  for (int index = 0; index < MAX_TRAILS; index += 1) {
+    if (index >= uTrailCount) break;
+
+    vec4 trail = uTrails[index];
+    vec4 motion = uTrailMotion[index];
+    vec2 segment = trail.zw - trail.xy;
+    float segmentLengthSquared = dot(segment, segment);
+    if (segmentLengthSquared < 0.0001) continue;
+
+    float age = max(0.0, uTime - motion.z);
+    if (age > ${TRAIL_LIFETIME / 1000}) continue;
+
+    float speedRatio = clamp(motion.w / 20.0, 0.0, 1.0);
+    float segmentLength = sqrt(segmentLengthSquared);
+    vec2 pathTangent = segment / segmentLength;
+    vec2 relative = imagePosition - trail.xy;
+    float projection = clamp(
+      dot(relative, segment) / segmentLengthSquared,
+      0.0,
+      1.0
+    );
+    vec2 closestPoint = trail.xy + segment * projection;
+    vec2 fromPath = imagePosition - closestPoint;
+    float pathDistance = length(fromPath);
+    vec2 pathDirection = fromPath / max(pathDistance, 0.001);
+    float growth = clamp(
+      age / ${TRAIL_LIFETIME / 1000},
+      0.0,
+      1.0
+    );
+    float waveRadius = 5.0 + age * uRadius * 0.95;
+    float waveThickness = mix(
+      8.0,
+      19.0,
+      smoothstep(0.0, 1.0, growth)
+    );
+    float waveOffset = pathDistance - waveRadius;
+    float recency = float(index + 1) / max(float(uTrailCount), 1.0);
+    float trailWeight = mix(0.56, 1.0, recency);
+    float life = exp(-age * 2.15) *
+      (1.0 - smoothstep(1.35, ${TRAIL_LIFETIME / 1000}, age));
+    float organic =
+      sin(imagePosition.x * 0.041 + imagePosition.y * 0.057) * 0.55 +
+      sin(imagePosition.x * 0.019 - imagePosition.y * 0.033) * 0.35;
+    float waveEnvelope = exp(-pow(
+      waveOffset / (waveThickness * 1.75),
+      2.0
+    ));
+    float wave = (
+      cos(waveOffset * 0.21 + organic * 0.22) +
+      cos(waveOffset * 0.105 - organic * 0.15) * 0.22
+    ) * waveEnvelope;
+    float wakeAmplitude = mix(1.4, 7.2, speedRatio) *
+      trailWeight * life;
+    pointerDistortion += pathDirection * wave * wakeAmplitude;
+
+    if (index == uTrailCount - 1) {
+      vec2 fromHead = imagePosition - trail.zw;
+      float headDistance = length(fromHead);
+      vec2 headDirection = fromHead / max(headDistance, 0.001);
+      float contactRadius = mix(10.0, 19.0, speedRatio);
+      float pressure = 1.0 - smoothstep(
+        contactRadius * 0.18,
+        contactRadius,
+        headDistance
+      );
+      float rim = exp(-pow(
+        (headDistance - contactRadius) / (contactRadius * 0.42),
+        2.0
+      ));
+      float forward = dot(fromHead, pathTangent);
+      float bowBias = mix(
+        0.72,
+        1.22,
+        smoothstep(-contactRadius, contactRadius, forward)
+      );
+      float headAmplitude = mix(3.2, 10.5, speedRatio) *
+        exp(-age * 12.0);
+      pointerDistortion += headDirection * (rim - pressure * 0.42) *
+        headAmplitude * bowBias;
+      pointerDistortion += pathTangent * pressure * headAmplitude * 0.24;
+    }
+  }
+
+  float distortionLength = length(pointerDistortion);
+  if (distortionLength > 0.001) {
+    const float distortionLimit = 12.0;
+    pointerDistortion *= distortionLimit *
+      tanh(distortionLength / distortionLimit) / distortionLength;
+  }
+  float edgeDistance = min(
+    min(imagePosition.x, uImageSize.x - imagePosition.x),
+    min(imagePosition.y, uImageSize.y - imagePosition.y)
+  );
+  float edgeBoost = mix(2.65, 1.0, smoothstep(0.0, 72.0, edgeDistance));
+  return pointerDistortion * edgeBoost;
+}
 
 void main() {
   vec2 imagePosition = vUv * uImageSize;
@@ -112,7 +231,7 @@ void main() {
       max(origin.y, uImageSize.y - origin.y)
     )
   );
-  const float travelDuration = 1.00;
+  const float travelDuration = 1.45;
   float waveTravelDistance = furthestDistance + 130.0;
   float frontRadius = uIntroTime / travelDuration * waveTravelDistance;
   float frontOffset = distanceFromOrigin - frontRadius;
@@ -122,7 +241,7 @@ void main() {
     1.0
   );
   float waveGrowth = smoothstep(0.0, 1.0, frontProgress);
-  float packetWidth = mix(42.0, 120.0, waveGrowth);
+  float packetWidth = mix(38.0, 105.0, waveGrowth);
   float reveal = 1.0 - smoothstep(
     -packetWidth * 0.55,
     packetWidth * 0.26,
@@ -133,38 +252,64 @@ void main() {
     0.0,
     1.0
   );
-  float distanceGain = mix(0.24, 1.16, smoothstep(0.0, 1.0, distanceRatio));
+  float launchGrowth = smoothstep(0.0, 0.16, distanceRatio);
+  float distanceDamping = exp(-max(distanceRatio - 0.16, 0.0) * 1.55);
+  float distanceGain = mix(0.24, 1.0, launchGrowth) * distanceDamping;
   float organic =
     sin(imagePosition.x * 0.031 + imagePosition.y * 0.047) * 0.52 +
     sin(imagePosition.x * 0.014 - imagePosition.y * 0.039) * 0.30;
   float middleOffset = distanceFromOrigin - frontRadius * 0.84;
-  float innerOffset = distanceFromOrigin - frontRadius * 0.58;
-  float outerWidth = packetWidth * 0.55;
-  float middleWidth = packetWidth * 0.39;
-  float innerWidth = packetWidth * 0.27;
+  float innerOffset = distanceFromOrigin - frontRadius * 0.54;
+  float deepInnerOffset = distanceFromOrigin - frontRadius * 0.41;
+  float fingertipOffset = distanceFromOrigin - frontRadius * 0.29;
+  float outerWidth = packetWidth * 0.46;
+  float middleWidth = packetWidth * 0.32;
+  float innerWidth = packetWidth * 0.22;
+  float deepInnerWidth = packetWidth * 0.15;
+  float fingertipWidth = packetWidth * 0.11;
   float outerEnvelope = exp(-pow(frontOffset / outerWidth, 2.0));
   float middleEnvelope = exp(-pow(middleOffset / middleWidth, 2.0));
   float innerEnvelope = exp(-pow(innerOffset / innerWidth, 2.0));
-  float outerWave = cos(frontOffset / outerWidth * 2.20 + organic * 0.12) *
+  float deepInnerEnvelope = exp(-pow(
+    deepInnerOffset / deepInnerWidth,
+    2.0
+  ));
+  float fingertipEnvelope = exp(-pow(
+    fingertipOffset / (fingertipWidth * 1.55),
+    2.0
+  ));
+  float outerWave = sin(frontOffset / outerWidth * 2.20 + organic * 0.12) *
     outerEnvelope;
-  float middleWave = cos(middleOffset / middleWidth * 2.35 - organic * 0.10) *
+  float middleWave = sin(middleOffset / middleWidth * 2.35 - organic * 0.10) *
     middleEnvelope * 0.50;
-  float innerWave = cos(innerOffset / innerWidth * 2.50 + organic * 0.08) *
+  float innerWave = sin(innerOffset / innerWidth * 2.50 + organic * 0.08) *
     innerEnvelope * 0.25;
-  float ripple = outerWave + middleWave + innerWave;
+  float deepInnerLife = 1.0 - smoothstep(1.60, 2.25, uIntroTime);
+  float deepInnerWave = sin(
+    deepInnerOffset / deepInnerWidth * 2.62 - organic * 0.07
+  ) * deepInnerEnvelope * deepInnerLife * 0.13;
+  float fingertipLife = 1.0 - smoothstep(1.70, 2.30, uIntroTime);
+  float fingertipWave = (
+    cos(fingertipOffset * 0.21 + organic * 0.22) +
+    cos(fingertipOffset * 0.105 - organic * 0.15) * 0.22
+  ) * fingertipEnvelope * fingertipLife * 0.10;
+  float ripple = outerWave + middleWave + innerWave + deepInnerWave +
+    fingertipWave;
   float packetEnvelope = outerEnvelope + middleEnvelope * 0.45 +
-    innerEnvelope * 0.20;
+    innerEnvelope * 0.20 + deepInnerEnvelope * deepInnerLife * 0.09 +
+    fingertipEnvelope * fingertipLife * 0.06;
   vec2 radial = normalize(fromOrigin + vec2(0.001));
   vec2 tangent = vec2(-radial.y, radial.x);
-  vec2 distortion = radial * ripple * 11.0 * distanceGain +
-    tangent * sin(frontOffset / outerWidth * 1.55 + organic) * 1.0 *
+  vec2 introDistortion = radial * ripple * 8.0 * distanceGain +
+    tangent * sin(frontOffset / outerWidth * 1.55 + organic) * 0.65 *
       packetEnvelope * distanceGain;
   float edgeDistance = min(
     min(imagePosition.x, uImageSize.x - imagePosition.x),
     min(imagePosition.y, uImageSize.y - imagePosition.y)
   );
-  float edgeBoost = mix(2.45, 1.0, smoothstep(0.0, 68.0, edgeDistance));
-  distortion *= edgeBoost;
+  float edgeBoost = mix(1.75, 1.0, smoothstep(0.0, 68.0, edgeDistance));
+  introDistortion *= edgeBoost;
+  vec2 distortion = introDistortion + getPointerDistortion(imagePosition);
   vec2 samplePosition = imagePosition - distortion;
   if (
     any(lessThan(samplePosition, vec2(0.0))) ||
@@ -426,6 +571,7 @@ const DisintegrationImg: React.FC<Props> = ({ image }) => {
     let introStartedAt = 0;
     let lastInteractionAt = 0;
     let previousPointer: PointerPosition | null = null;
+    let touchStart: TouchStart | null = null;
     let width = 0;
     let height = 0;
     let bleed = 0;
@@ -467,6 +613,7 @@ const DisintegrationImg: React.FC<Props> = ({ image }) => {
       mode = "idle";
       trails.length = 0;
       previousPointer = null;
+      touchStart = null;
       hideCanvas();
     };
 
@@ -532,6 +679,11 @@ const DisintegrationImg: React.FC<Props> = ({ image }) => {
         bleed: getUniform(nextIntroProgram, "uBleed"),
         introTime: getUniform(nextIntroProgram, "uIntroTime"),
         introOrigin: getUniform(nextIntroProgram, "uIntroOrigin"),
+        time: getUniform(nextIntroProgram, "uTime"),
+        radius: getUniform(nextIntroProgram, "uRadius"),
+        trailCount: getUniform(nextIntroProgram, "uTrailCount"),
+        trails: getUniform(nextIntroProgram, "uTrails[0]"),
+        trailMotion: getUniform(nextIntroProgram, "uTrailMotion[0]"),
       };
 
       try {
@@ -625,6 +777,7 @@ const DisintegrationImg: React.FC<Props> = ({ image }) => {
       gl.bindVertexArray(vertexArray);
       gl.activeTexture(gl.TEXTURE0);
       gl.bindTexture(gl.TEXTURE_2D, texture);
+      uploadTrails();
 
       if (mode === "intro") {
         if (!introProgram || !introUniforms) return false;
@@ -636,10 +789,14 @@ const DisintegrationImg: React.FC<Props> = ({ image }) => {
         gl.uniform1f(introUniforms.bleed, bleed);
         gl.uniform1f(introUniforms.introTime, (now - introStartedAt) / 1000);
         gl.uniform2fv(introUniforms.introOrigin, introOrigin);
+        gl.uniform1f(introUniforms.time, (now - clockStartedAt) / 1000);
+        gl.uniform1f(introUniforms.radius, clamp(width * 0.13, 58, 96));
+        gl.uniform1i(introUniforms.trailCount, trails.length);
+        gl.uniform4fv(introUniforms.trails, trailCoordinates);
+        gl.uniform4fv(introUniforms.trailMotion, trailMotion);
         gl.drawArrays(gl.TRIANGLES, 0, 6);
       } else {
         if (!rippleProgram || !rippleUniforms) return false;
-        uploadTrails();
         gl.useProgram(rippleProgram);
         gl.uniform1i(rippleUniforms.image, 0);
         gl.uniform2f(rippleUniforms.imageSize, width, height);
@@ -665,10 +822,13 @@ const DisintegrationImg: React.FC<Props> = ({ image }) => {
       frameId = 0;
       if (disposed || document.hidden || mode === "idle") return;
 
-      if (mode === "interactive") {
+      if (mode === "intro" || mode === "interactive") {
         while (trails.length && now - trails[0].createdAt > TRAIL_LIFETIME) {
           trails.shift();
         }
+      }
+
+      if (mode === "interactive") {
         if (!trails.length && now - lastInteractionAt > TRAIL_LIFETIME) {
           setIdle();
           return;
@@ -693,6 +853,17 @@ const DisintegrationImg: React.FC<Props> = ({ image }) => {
       }
 
       if (mode === "intro" && now - introStartedAt >= INTRO_TOTAL) {
+        if (
+          trails.length &&
+          rippleProgram &&
+          rippleUniforms &&
+          now - lastInteractionAt <= TRAIL_LIFETIME
+        ) {
+          mode = "interactive";
+          img.style.opacity = "1";
+          scheduleFrame();
+          return;
+        }
         setIdle();
         return;
       }
@@ -729,14 +900,12 @@ const DisintegrationImg: React.FC<Props> = ({ image }) => {
     };
 
     const wakeInteraction = () => {
-      if (
-        !resourcesReady ||
-        !rippleProgram ||
-        !rippleUniforms ||
-        mode === "intro"
-      ) {
+      if (!resourcesReady) return;
+      if (mode === "intro") {
+        scheduleFrame();
         return;
       }
+      if (!rippleProgram || !rippleUniforms) return;
       if (mode === "idle") {
         mode = "interactive";
         hideCanvas();
@@ -745,18 +914,30 @@ const DisintegrationImg: React.FC<Props> = ({ image }) => {
     };
 
     const handlePointerMove = (event: PointerEvent) => {
-      if (
-        reducedMotion.matches ||
-        mode === "intro" ||
-        event.pointerType === "touch"
-      ) {
+      if (reducedMotion.matches) {
+        return;
+      }
+      if (event.pointerType === "touch") {
+        if (
+          touchStart?.pointerId === event.pointerId &&
+          Math.hypot(
+            event.clientX - touchStart.x,
+            event.clientY - touchStart.y
+          ) > TOUCH_TAP_MAX_DISTANCE
+        ) {
+          touchStart = null;
+        }
         return;
       }
 
       // Interaction must be able to recover independently if the intro was
       // skipped, interrupted, or mounted after the image had already loaded.
       if (!resourcesReady && !initialize()) return;
-      if (!rippleProgram || !rippleUniforms) return;
+      if (mode === "intro") {
+        if (!introProgram || !introUniforms) return;
+      } else if (!rippleProgram || !rippleUniforms) {
+        return;
+      }
 
       const bounds = container.getBoundingClientRect();
       if (bounds.width <= 0 || bounds.height <= 0) return;
@@ -801,6 +982,68 @@ const DisintegrationImg: React.FC<Props> = ({ image }) => {
       previousPointer = { x, y, time: now };
       lastInteractionAt = now;
       wakeInteraction();
+    };
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (
+        event.pointerType !== "touch" ||
+        reducedMotion.matches ||
+        !img.complete ||
+        !img.naturalWidth
+      ) {
+        return;
+      }
+      touchStart = {
+        x: event.clientX,
+        y: event.clientY,
+        time: performance.now(),
+        pointerId: event.pointerId,
+      };
+    };
+
+    const handlePointerUp = (event: PointerEvent) => {
+      if (event.pointerType !== "touch" || !touchStart) return;
+      const start = touchStart;
+      touchStart = null;
+      const now = performance.now();
+      if (
+        event.pointerId !== start.pointerId ||
+        now - start.time > TOUCH_TAP_MAX_DURATION ||
+        Math.hypot(event.clientX - start.x, event.clientY - start.y) >
+          TOUCH_TAP_MAX_DISTANCE
+      ) {
+        return;
+      }
+
+      if (!resourcesReady && !initialize()) return;
+      if (mode === "intro") {
+        if (!introProgram || !introUniforms) return;
+      } else if (!rippleProgram || !rippleUniforms) {
+        return;
+      }
+
+      const bounds = container.getBoundingClientRect();
+      if (bounds.width <= 0 || bounds.height <= 0) return;
+      const x = (event.clientX - bounds.left) * (width / bounds.width);
+      const y = (event.clientY - bounds.top) * (height / bounds.height);
+      const halfSegment = 0.75;
+      trails.push({
+        fromX: x - halfSegment,
+        fromY: y,
+        x: x + halfSegment,
+        y,
+        deltaX: halfSegment * 2,
+        deltaY: 0,
+        createdAt: now,
+        speed: 8,
+      });
+      if (trails.length > MAX_TRAILS) trails.shift();
+      lastInteractionAt = now;
+      wakeInteraction();
+    };
+
+    const handlePointerCancel = (event: PointerEvent) => {
+      if (touchStart?.pointerId === event.pointerId) touchStart = null;
     };
 
     const handlePointerEnter = (event: PointerEvent) => {
@@ -884,6 +1127,15 @@ const DisintegrationImg: React.FC<Props> = ({ image }) => {
     container.addEventListener("pointermove", handlePointerMove, {
       passive: true,
     });
+    container.addEventListener("pointerdown", handlePointerDown, {
+      passive: true,
+    });
+    container.addEventListener("pointerup", handlePointerUp, {
+      passive: true,
+    });
+    container.addEventListener("pointercancel", handlePointerCancel, {
+      passive: true,
+    });
     container.addEventListener("pointerenter", handlePointerEnter, {
       passive: true,
     });
@@ -907,6 +1159,9 @@ const DisintegrationImg: React.FC<Props> = ({ image }) => {
       destroyResources();
       img.removeEventListener("load", handleLoad);
       container.removeEventListener("pointermove", handlePointerMove);
+      container.removeEventListener("pointerdown", handlePointerDown);
+      container.removeEventListener("pointerup", handlePointerUp);
+      container.removeEventListener("pointercancel", handlePointerCancel);
       container.removeEventListener("pointerenter", handlePointerEnter);
       container.removeEventListener("pointerleave", handlePointerLeave);
       canvas.removeEventListener("webglcontextlost", handleContextLost);

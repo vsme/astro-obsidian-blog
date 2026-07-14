@@ -7,6 +7,7 @@ import Layout from "@/layouts/Layout.astro";
 import { getCollection } from "astro:content";
 import { parseEntry } from "@/utils/parseEntry";
 import DiaryTimeline from "@/components/DiaryTimeline.tsx";
+import TimeRiverHero from "@/components/TimeRiverHero.astro";
 
 const diaryEntries = await getCollection("diary");
 
@@ -56,46 +57,51 @@ const paginationInfo = {
       跳转到主要内容
     </a>
 
-    <section
-      id="diary"
-      class="from-skin-fill via-skin-card to-skin-fill mx-auto min-h-screen max-w-app bg-gradient-to-br px-4 pt-4"
-      role="region"
-      aria-labelledby="diary-heading"
-    >
-      <div class="min-h-screen">
-        <!-- 页面标题 -->
-        <header class="py-0">
-          <h1 id="diary-heading" class="sr-only">时间档案</h1>
-          <p class="sr-only">
-            按时间顺序展示的日记条目，支持无限滚动加载更多内容
-          </p>
-        </header>
+    <TimeRiverHero totalEntries={sortedEntries.length} />
 
-        <!-- 主要内容区域 -->
-        <div class="py-8">
-          <div id="diary-description" class="sr-only">
-            日记条目按时间倒序排列，每页显示 {ITEMS_PER_PAGE} 条记录，当前共有
-            {sortedEntries.length} 条记录
+    <div class="time-river-diary-shell">
+      <section
+        id="diary"
+        class="time-river-diary mx-auto min-h-screen max-w-app px-4 pt-4"
+        role="region"
+        aria-labelledby="diary-heading"
+      >
+        <div class="min-h-screen">
+          <!-- 页面标题 -->
+          <header class="py-0">
+            <h2 id="diary-heading" class="sr-only">时间档案</h2>
+            <p class="sr-only">
+              按时间顺序展示的日记条目，支持无限滚动加载更多内容
+            </p>
+          </header>
+
+          <!-- 主要内容区域 -->
+          <div class="py-8">
+            <div id="diary-description" class="sr-only">
+              日记条目按时间倒序排列，每页显示 {ITEMS_PER_PAGE} 条记录，当前共有
+              {sortedEntries.length} 条记录
+            </div>
+            <div
+              id="diary-content"
+              role="feed"
+              aria-label="日记时间线"
+              aria-describedby="diary-description"
+              aria-live="polite"
+              aria-busy="false"
+            >
+              <DiaryTimeline
+                client:load
+                initialEntries={initialParsedEntries}
+                paginationInfo={paginationInfo}
+                riverMode
+              />
+            </div>
           </div>
-          <div
-            id="diary-content"
-            role="feed"
-            aria-label="日记时间线"
-            aria-describedby="diary-description"
-            aria-live="polite"
-            aria-busy="false"
-          >
-            <DiaryTimeline
-              client:load
-              initialEntries={initialParsedEntries}
-              paginationInfo={paginationInfo}
-            />
-          </div>
+
+          <BackToTopButton />
         </div>
-
-        <BackToTopButton />
-      </div>
-    </section>
+      </section>
+    </div>
   </main>
 
   <Footer />

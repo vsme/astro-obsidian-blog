@@ -21,6 +21,7 @@ export interface DiaryEntryProps {
   date: string;
   hideYear?: boolean;
   timeBlocks: TimeBlock[];
+  riverMode?: boolean;
 }
 
 const TZ = SITE.timezone;
@@ -45,6 +46,7 @@ const DiaryEntryReact: React.FC<DiaryEntryProps> = ({
   date,
   hideYear = false,
   timeBlocks,
+  riverMode = false,
 }) => {
   // 1) 先准备稳定的 SSR 文案：绝对日期 (MM/DD) + 固定时区的星期/年份
   const entryDateUTC = ymdToUTC(date);
@@ -89,9 +91,21 @@ const DiaryEntryReact: React.FC<DiaryEntryProps> = ({
   }, [date]);
 
   return (
-    <div className="date-group mb-16" data-pagefind-weight="2">
-      <header className="mb-8">
-        <div className="flex items-baseline gap-3">
+    <div
+      className={`date-group ${riverMode ? "time-river-date-group" : "mb-16"}`}
+      data-pagefind-weight="2"
+    >
+      <header className={riverMode ? "time-river-date-header" : "mb-8"}>
+        <div
+          className={
+            riverMode ? "time-river-date-lockup" : "flex items-baseline gap-3"
+          }
+        >
+          {riverMode && !hideYear && (
+            <div className="time-river-date-year" aria-hidden="true">
+              {yearLabel}
+            </div>
+          )}
           <h2
             id={`date-${date}`}
             className="text-skin-accent m-0 text-3xl leading-none font-bold"
@@ -103,16 +117,32 @@ const DiaryEntryReact: React.FC<DiaryEntryProps> = ({
               {relativeLabel ?? absoluteLabel}
             </span>
           </h2>
-          <div className="flex flex-col" aria-hidden="true">
-            <div className="text-skin-base text-base leading-tight font-medium">
-              {weekdayLabel}
-            </div>
-            {!hideYear && (
-              <div className="text-skin-base/70 text-sm leading-tight">
-                {yearLabel}
+          {riverMode ? (
+            <div className="time-river-date-secondary" aria-hidden="true">
+              <div className="time-river-date-meta">
+                <span>{weekdayLabel}</span>
               </div>
-            )}
-          </div>
+              <div className="time-river-date-times">
+                {timeBlocks.map((block, index) => (
+                  <React.Fragment key={`${block.time}-${index}`}>
+                    {index > 0 && <span>·</span>}
+                    <time dateTime={`${date}T${block.time}`}>{block.time}</time>
+                  </React.Fragment>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div className="flex flex-col" aria-hidden="true">
+              <div className="text-skin-base text-base leading-tight font-medium">
+                {weekdayLabel}
+              </div>
+              {!hideYear && (
+                <div className="text-skin-base/70 text-sm leading-tight">
+                  {yearLabel}
+                </div>
+              )}
+            </div>
+          )}
         </div>
         <div className="sr-only">
           {date} 共有 {timeBlocks.length} 个时间段的记录
@@ -134,6 +164,7 @@ const DiaryEntryReact: React.FC<DiaryEntryProps> = ({
             images={block.images}
             htmlContent={block.htmlContent}
             mediaCards={block.mediaCards}
+            riverMode={riverMode}
           />
         ))}
       </div>

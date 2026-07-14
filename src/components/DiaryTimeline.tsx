@@ -17,6 +17,7 @@ export interface DiaryTimelineProps {
   initialEntries: ParsedEntry[];
   paginationInfo: PaginationInfo;
   hideYear?: boolean;
+  riverMode?: boolean;
 }
 
 const DiaryTimeline: React.FC<DiaryTimelineProps> = ({
@@ -28,6 +29,7 @@ const DiaryTimeline: React.FC<DiaryTimelineProps> = ({
     itemsPerPage: 5,
   },
   hideYear = false,
+  riverMode = false,
 }) => {
   const [displayedEntries, setDisplayedEntries] = useState<ParsedEntry[]>(
     initialEntries || []
@@ -141,12 +143,13 @@ const DiaryTimeline: React.FC<DiaryTimelineProps> = ({
           aria-labelledby={`date-${entry.date}`}
           aria-describedby={`content-${entry.date}`}
           tabIndex={0}
-          className="focus:ring-skin-accent focus:ring-offset-skin-fill rounded-lg focus:outline-none"
+          className={`${riverMode ? "time-river-entry" : ""} focus:ring-skin-accent focus:ring-offset-skin-fill rounded-lg focus:outline-none`}
         >
           <DiaryEntryReact
             date={entry.date}
             hideYear={hideYear}
             timeBlocks={entry.timeBlocks}
+            riverMode={riverMode}
           />
         </article>
       ))}

@@ -110,10 +110,6 @@ html[data-theme="dark"] {
   opacity: 0;
 }
 
-.disintegration-img.loaded {
-  opacity: 1;
-}
-
 h1,
 h2,
 h3,

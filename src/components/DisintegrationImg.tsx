@@ -53,7 +53,9 @@ type AnimationMode = "idle" | "intro" | "interactive";
 
 const MAX_TRAILS = 18;
 const INTRO_TOTAL = 1600;
-const TRAIL_LIFETIME = 860;
+const TRAIL_LIFETIME = 1800;
+const TRAIL_SAMPLE_INTERVAL = 38;
+const TRAIL_FORCE_DISTANCE = 18;
 
 const clamp = (value: number, min: number, max: number) =>
   Math.min(max, Math.max(min, value));
@@ -232,48 +234,73 @@ void main() {
       float speedRatio = clamp(motion.w / 20.0, 0.0, 1.0);
       float segmentLength = sqrt(segmentLengthSquared);
       vec2 tangent = segment / segmentLength;
-      vec2 normal = vec2(-tangent.y, tangent.x);
       vec2 relative = imagePosition - trail.xy;
-      float along = dot(relative, tangent);
-      float lateral = dot(relative, normal);
-      float growth = smoothstep(0.0, 0.20, age);
-      float rearFeather = uRadius * mix(0.34, 0.92, growth);
-      float frontFeather = mix(7.0, 15.0, speedRatio);
-      if (along <= -rearFeather || along >= segmentLength + frontFeather) {
-        continue;
-      }
-
-      float projection = clamp(along / segmentLength, 0.0, 1.0);
-      float wakeWidth = uRadius * mix(0.28, 0.64, growth) *
-        mix(1.0, 0.62, projection);
-      float lateralDistance = abs(lateral);
-      if (lateralDistance >= wakeWidth) continue;
-
-      float crossFade = 1.0 - smoothstep(
-        wakeWidth * 0.16,
-        wakeWidth,
-        lateralDistance
+      float projection = clamp(
+        dot(relative, segment) / segmentLengthSquared,
+        0.0,
+        1.0
       );
-      float rearFade = smoothstep(-rearFeather, 0.0, along);
-      float frontFade = 1.0 - smoothstep(
-        segmentLength,
-        segmentLength + frontFeather,
-        along
+      vec2 closestPoint = trail.xy + segment * projection;
+      vec2 fromPath = imagePosition - closestPoint;
+      float pathDistance = length(fromPath);
+      vec2 pathDirection = fromPath / max(pathDistance, 0.001);
+      float growth = clamp(
+        age / ${TRAIL_LIFETIME / 1000},
+        0.0,
+        1.0
       );
+      float waveRadius = 5.0 + age * uRadius * 0.95;
+      float waveThickness = mix(
+        8.0,
+        19.0,
+        smoothstep(0.0, 1.0, growth)
+      );
+      float waveOffset = pathDistance - waveRadius;
       float recency = float(index + 1) / max(float(uTrailCount), 1.0);
-      float trailWeight = mix(1.0, 0.62, recency * recency);
-      float bloom = mix(0.62, 1.0, smoothstep(0.0, 0.08, age));
-      float life = bloom * exp(-max(age - 0.08, 0.0) * 4.8);
+      float trailWeight = mix(0.56, 1.0, recency);
+      float life = exp(-age * 2.15) *
+        (1.0 - smoothstep(1.35, ${TRAIL_LIFETIME / 1000}, age));
       float organic =
         sin(imagePosition.x * 0.041 + imagePosition.y * 0.057) * 0.55 +
         sin(imagePosition.x * 0.019 - imagePosition.y * 0.033) * 0.35;
-      float phase = lateral * mix(0.13, 0.18, speedRatio) - age * 11.5 +
-        along * 0.026 + organic;
-      float envelope = crossFade * rearFade * frontFade * trailWeight * life;
-      float amplitude = mix(4.5, 11.5, speedRatio) * envelope;
+      float waveEnvelope = exp(-pow(
+        waveOffset / (waveThickness * 1.75),
+        2.0
+      ));
+      float wave = (
+        cos(waveOffset * 0.21 + organic * 0.22) +
+        cos(waveOffset * 0.105 - organic * 0.15) * 0.22
+      ) * waveEnvelope;
+      float wakeAmplitude = mix(1.4, 7.2, speedRatio) *
+        trailWeight * life;
+      distortion += pathDirection * wave * wakeAmplitude;
 
-      distortion += normal * sin(phase) * amplitude;
-      distortion += tangent * cos(phase * 0.71 + organic) * amplitude * 0.18;
+      if (index == uTrailCount - 1) {
+        vec2 fromHead = imagePosition - trail.zw;
+        float headDistance = length(fromHead);
+        vec2 headDirection = fromHead / max(headDistance, 0.001);
+        float contactRadius = mix(10.0, 19.0, speedRatio);
+        float pressure = 1.0 - smoothstep(
+          contactRadius * 0.18,
+          contactRadius,
+          headDistance
+        );
+        float rim = exp(-pow(
+          (headDistance - contactRadius) / (contactRadius * 0.42),
+          2.0
+        ));
+        float forward = dot(fromHead, tangent);
+        float bowBias = mix(
+          0.72,
+          1.22,
+          smoothstep(-contactRadius, contactRadius, forward)
+        );
+        float headAmplitude = mix(3.2, 10.5, speedRatio) *
+          exp(-age * 12.0);
+        distortion += headDirection * (rim - pressure * 0.42) *
+          headAmplitude * bowBias;
+        distortion += tangent * pressure * headAmplitude * 0.24;
+      }
   }
 
   float distortionLength = length(distortion);
@@ -747,9 +774,17 @@ const DisintegrationImg: React.FC<Props> = ({ image }) => {
       const deltaX = x - previousPointer.x;
       const deltaY = y - previousPointer.y;
       const distance = Math.hypot(deltaX, deltaY);
-      if (distance < 0.15) return;
+      if (distance < 0.8) return;
 
-      const frameDuration = Math.max(4, now - previousPointer.time);
+      const sampleDuration = now - previousPointer.time;
+      if (
+        sampleDuration < TRAIL_SAMPLE_INTERVAL &&
+        distance < TRAIL_FORCE_DISTANCE
+      ) {
+        return;
+      }
+
+      const frameDuration = Math.max(4, sampleDuration);
       const speed = clamp(distance / (frameDuration / 16.667), 0, 20);
       trails.push({
         fromX: previousPointer.x,

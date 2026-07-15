@@ -113,9 +113,9 @@ const DiaryEntryReact: React.FC<DiaryEntryProps> = ({
           >
             {/* SSR 时渲染 absoluteLabel；CSR 完成后若有相对文案则替换。
                suppressHydrationWarning 防止首帧文本差异触发水合警告 */}
-            <span suppressHydrationWarning>
+            <time dateTime={date} suppressHydrationWarning>
               {relativeLabel ?? absoluteLabel}
-            </span>
+            </time>
           </h2>
           {riverMode ? (
             <div className="time-river-date-secondary" aria-hidden="true">

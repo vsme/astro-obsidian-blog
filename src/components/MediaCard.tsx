@@ -88,27 +88,39 @@ const MediaCard: React.FC<MediaCardProps> = ({
 
   const cardUrl = getCardUrl();
   const isInternalUrl = cardUrl.startsWith("/");
+  const typeLabel =
+    cardType === "movie"
+      ? "电影"
+      : cardType === "tv"
+        ? "剧集"
+        : cardType === "book"
+          ? "书籍"
+          : "音乐";
 
   return (
-    <a
-      href={cardUrl}
-      target={isInternalUrl ? "_self" : "_blank"}
-      rel={isInternalUrl ? undefined : "noopener noreferrer"}
+    <article
       data-media-type={cardType}
-      className={`media-card ${theme === "dark" ? "dark" : "light"} block w-full max-w-3xl cursor-pointer rounded-lg bg-muted/20 no-underline transition-all duration-300 hover:bg-muted/30`}
+      className={`media-card ${theme === "dark" ? "dark" : "light"} block w-full max-w-3xl rounded-lg bg-muted/20 transition-all duration-300 hover:bg-muted/30`}
     >
       <div className="flex flex-col gap-3 p-3 sm:flex-row">
         {/* 海报图片 - 左侧 */}
         {posterUrl && (
-          <div className="relative mx-auto w-24 flex-shrink-0 sm:mx-0">
+          <a
+            href={cardUrl}
+            target={isInternalUrl ? "_self" : "_blank"}
+            rel={isInternalUrl ? undefined : "noopener noreferrer"}
+            className="relative mx-auto block w-24 flex-shrink-0 no-underline sm:mx-0"
+            aria-label={`查看${typeLabel}《${title}》详情`}
+          >
             <img
               src={posterUrl}
-              alt={title}
+              alt={`${typeLabel}《${title}》的封面`}
               className={`my-0 w-full rounded-md object-cover shadow-sm ${
                 cardType === "music" ? "aspect-square" : "aspect-[2/3]"
               }`}
+              loading="lazy"
             />
-          </div>
+          </a>
         )}
 
         {/* 媒体信息 - 右侧 */}
@@ -117,8 +129,15 @@ const MediaCard: React.FC<MediaCardProps> = ({
           <div className="mb-3 flex flex-col sm:flex-row sm:items-start sm:justify-between">
             <div className="flex-1 text-center sm:text-left">
               <div className="mb-2">
-                <h3 className="text-skin-accent mt-0 text-lg leading-tight font-bold sm:text-xl">
-                  {title}
+                <h3 className="mt-0 text-lg leading-tight font-bold sm:text-xl">
+                  <a
+                    href={cardUrl}
+                    target={isInternalUrl ? "_self" : "_blank"}
+                    rel={isInternalUrl ? undefined : "noopener noreferrer"}
+                    className="text-skin-accent no-underline hover:underline"
+                  >
+                    {title}
+                  </a>
                 </h3>
               </div>
 
@@ -213,7 +232,7 @@ const MediaCard: React.FC<MediaCardProps> = ({
               genres.split(/[,，]/).map((genre, index) => (
                 <span
                   key={index}
-                  className="rounded-full border border-accent/20 bg-accent/10 px-2.5 py-1 text-xs font-medium text-accent transition-colors hover:bg-accent/15"
+                  className="rounded-full border border-accent/20 bg-accent/10 px-2.5 py-1 text-xs font-medium text-accent"
                 >
                   {genre.trim()}
                 </span>
@@ -237,7 +256,7 @@ const MediaCard: React.FC<MediaCardProps> = ({
           )}
         </div>
       </div>
-    </a>
+    </article>
   );
 };
 

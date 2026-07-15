@@ -38,6 +38,27 @@ const paginationInfo = {
   hasMore: totalPages > 1,
   itemsPerPage: ITEMS_PER_PAGE,
 };
+
+const archiveGroups = Array.from(
+  sortedEntries.reduce((years, entry, index) => {
+    const date = entry.id.replace(".md", "");
+    const [year, month] = date.split("-");
+    const monthKey = `${year}-${month}`;
+    const months = years.get(year) ?? new Map();
+
+    if (!months.has(monthKey)) {
+      months.set(monthKey, {
+        value: monthKey,
+        label: `${Number(month)}月`,
+        targetDate: date,
+        page: Math.floor(index / ITEMS_PER_PAGE) + 1,
+      });
+    }
+
+    years.set(year, months);
+    return years;
+  }, new Map<string, Map<string, { value: string; label: string; targetDate: string; page: number }>>())
+).map(([year, months]) => ({ year, months: Array.from(months.values()) }));
 ---
 
 <Layout title={`时间档案 | ${SITE.title}`}>
@@ -71,7 +92,7 @@ const paginationInfo = {
           <header class="py-0">
             <h2 id="diary-heading" class="sr-only">时间档案</h2>
             <p class="sr-only">
-              按时间顺序展示的日记条目，支持无限滚动加载更多内容
+              日记条目按时间倒序展示，最新记录排在最前，支持筛选和时间导航
             </p>
           </header>
 
@@ -81,18 +102,12 @@ const paginationInfo = {
               日记条目按时间倒序排列，每页显示 {ITEMS_PER_PAGE} 条记录，当前共有
               {sortedEntries.length} 条记录
             </div>
-            <div
-              id="diary-content"
-              role="feed"
-              aria-label="日记时间线"
-              aria-describedby="diary-description"
-              aria-live="polite"
-              aria-busy="false"
-            >
+            <div id="diary-content">
               <DiaryTimeline
                 client:load
                 initialEntries={initialParsedEntries}
                 paginationInfo={paginationInfo}
+                archiveGroups={archiveGroups}
                 riverMode
               />
             </div>

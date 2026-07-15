@@ -1,4 +1,11 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
+import { flushSync } from "react-dom";
 import DiaryEntryReact, { type TimeBlock } from "./DiaryEntryReact";
 
 export interface ParsedEntry {
@@ -13,12 +20,50 @@ export interface PaginationInfo {
   itemsPerPage: number;
 }
 
+export interface ArchiveMonth {
+  value: string;
+  label: string;
+  targetDate: string;
+  page: number;
+}
+
+export interface ArchiveGroup {
+  year: string;
+  months: ArchiveMonth[];
+}
+
 export interface DiaryTimelineProps {
   initialEntries: ParsedEntry[];
   paginationInfo: PaginationInfo;
+  archiveGroups?: ArchiveGroup[];
   hideYear?: boolean;
   riverMode?: boolean;
 }
+
+type CategoryFilter = "all" | "daily" | "reading" | "watching" | "music";
+
+interface CategoryState {
+  entries: ParsedEntry[];
+  currentPage: number;
+  totalPages: number;
+  hasMore: boolean;
+  initialized: boolean;
+}
+
+type CategoryStates = Record<CategoryFilter, CategoryState>;
+
+interface DiaryPageResponse {
+  entries: ParsedEntry[];
+  pagination: PaginationInfo;
+}
+
+const CATEGORY_OPTIONS: Array<{ value: CategoryFilter; label: string }> = [
+  { value: "all", label: "全部" },
+  { value: "daily", label: "日常" },
+  { value: "reading", label: "阅读" },
+  { value: "watching", label: "观影" },
+  { value: "music", label: "音乐" },
+];
 
 const DiaryTimeline: React.FC<DiaryTimelineProps> = ({
   initialEntries = [],
@@ -28,180 +73,616 @@ const DiaryTimeline: React.FC<DiaryTimelineProps> = ({
     hasMore: false,
     itemsPerPage: 5,
   },
+  archiveGroups = [],
   hideYear = false,
   riverMode = false,
 }) => {
-  const [displayedEntries, setDisplayedEntries] = useState<ParsedEntry[]>(
-    initialEntries || []
-  );
-  const [currentPage, setCurrentPage] = useState(
-    paginationInfo?.currentPage || 1
+  const initialCategoryStates: CategoryStates = {
+    all: {
+      entries: initialEntries || [],
+      currentPage: paginationInfo?.currentPage || 1,
+      totalPages: paginationInfo?.totalPages || 1,
+      hasMore: paginationInfo?.hasMore || false,
+      initialized: true,
+    },
+    daily: {
+      entries: [],
+      currentPage: 0,
+      totalPages: 0,
+      hasMore: false,
+      initialized: false,
+    },
+    reading: {
+      entries: [],
+      currentPage: 0,
+      totalPages: 0,
+      hasMore: false,
+      initialized: false,
+    },
+    watching: {
+      entries: [],
+      currentPage: 0,
+      totalPages: 0,
+      hasMore: false,
+      initialized: false,
+    },
+    music: {
+      entries: [],
+      currentPage: 0,
+      totalPages: 0,
+      hasMore: false,
+      initialized: false,
+    },
+  };
+  const [categoryStates, setCategoryStates] = useState<CategoryStates>(
+    initialCategoryStates
   );
   const [isLoading, setIsLoading] = useState(false);
-  const [hasMore, setHasMore] = useState(paginationInfo?.hasMore || false);
+  const [activeCategory, setActiveCategory] = useState<CategoryFilter>("all");
+  const [activePeriod, setActivePeriod] = useState(
+    archiveGroups[0]?.months[0]?.value ?? ""
+  );
+  const [isPeriodMenuOpen, setIsPeriodMenuOpen] = useState(false);
 
-  // 使用 ref 来存储最新的状态值，避免闭包问题
   const isLoadingRef = useRef(false);
-  const hasMoreRef = useRef(paginationInfo?.hasMore || false);
-  const currentPageRef = useRef(paginationInfo?.currentPage || 1);
-  const loadingRequestRef = useRef<Set<number>>(new Set()); // 记录正在请求的页面
-  const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const loadingCountRef = useRef(0);
+  const categoryStatesRef = useRef<CategoryStates>(initialCategoryStates);
+  const pendingTargetDateRef = useRef<string | null>(null);
+  const pendingCategoryRef = useRef<CategoryFilter>("all");
+  const requestRef = useRef<Map<string, Promise<DiaryPageResponse>>>(new Map());
+  const loadMoreSentinelRef = useRef<HTMLDivElement>(null);
+  const filterOptionsRef = useRef<HTMLDivElement>(null);
+  const filterIndicatorRef = useRef<HTMLSpanElement>(null);
+  const periodPickerRef = useRef<HTMLDivElement>(null);
+  const periodTriggerRef = useRef<HTMLButtonElement>(null);
 
-  // 更新 ref 值
   useEffect(() => {
     isLoadingRef.current = isLoading;
   }, [isLoading]);
 
-  useEffect(() => {
-    hasMoreRef.current = hasMore;
-  }, [hasMore]);
-
-  useEffect(() => {
-    currentPageRef.current = currentPage;
-  }, [currentPage]);
-
-  const loadMore = useCallback(async () => {
-    if (isLoadingRef.current || !hasMoreRef.current) return;
-
-    const nextPage = currentPageRef.current + 1;
-
-    // 检查是否已经在请求这个页面
-    if (loadingRequestRef.current.has(nextPage)) {
-      return;
-    }
-
+  const startLoading = useCallback(() => {
+    loadingCountRef.current += 1;
+    isLoadingRef.current = true;
     setIsLoading(true);
-    loadingRequestRef.current.add(nextPage);
-
-    try {
-      const response = await fetch(`/api/diary/${nextPage}.json`);
-
-      if (!response.ok) {
-        throw new Error("Failed to fetch diary entries");
-      }
-
-      const data = await response.json();
-
-      if (data.entries && data.entries.length > 0) {
-        setDisplayedEntries(prev => [...prev, ...data.entries]);
-        setCurrentPage(nextPage);
-        setHasMore(data.pagination.hasMore);
-      } else {
-        setHasMore(false);
-      }
-    } catch (error) {
-      console.error("Error loading more entries:", error);
-      setHasMore(false);
-    } finally {
-      loadingRequestRef.current.delete(nextPage);
-      setIsLoading(false);
-    }
   }, []);
 
-  // 监听滚动事件，实现无限滚动
-  useEffect(() => {
-    const handleScroll = () => {
-      // 清除之前的定时器
-      if (scrollTimeoutRef.current) {
-        clearTimeout(scrollTimeoutRef.current);
-      }
+  const finishLoading = useCallback(() => {
+    loadingCountRef.current = Math.max(loadingCountRef.current - 1, 0);
+    const stillLoading = loadingCountRef.current > 0;
+    isLoadingRef.current = stillLoading;
+    setIsLoading(stillLoading);
+  }, []);
 
-      // 防抖处理，延迟执行
-      scrollTimeoutRef.current = setTimeout(() => {
-        if (
-          window.innerHeight + document.documentElement.scrollTop >=
-          document.documentElement.offsetHeight - 1000
-        ) {
-          loadMore();
-        }
-      }, 100); // 100ms 防抖
+  useEffect(() => {
+    if (!isPeriodMenuOpen) return;
+
+    const closeOnOutsidePointer = (event: PointerEvent) => {
+      if (!periodPickerRef.current?.contains(event.target as Node)) {
+        setIsPeriodMenuOpen(false);
+      }
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setIsPeriodMenuOpen(false);
+        periodTriggerRef.current?.focus();
+      }
     };
 
-    window.addEventListener("scroll", handleScroll, { passive: true });
+    window.addEventListener("pointerdown", closeOnOutsidePointer);
+    window.addEventListener("keydown", closeOnEscape);
     return () => {
-      window.removeEventListener("scroll", handleScroll);
-      if (scrollTimeoutRef.current) {
-        clearTimeout(scrollTimeoutRef.current);
-      }
+      window.removeEventListener("pointerdown", closeOnOutsidePointer);
+      window.removeEventListener("keydown", closeOnEscape);
     };
-  }, [loadMore]);
+  }, [isPeriodMenuOpen]);
 
-  // 更新父容器的 aria-busy 状态
+  useLayoutEffect(() => {
+    const options = filterOptionsRef.current;
+    const indicator = filterIndicatorRef.current;
+    if (!options || !indicator) return;
+
+    const updateIndicator = () => {
+      const activeButton = options.querySelector<HTMLButtonElement>(
+        `[data-category="${activeCategory}"]`
+      );
+      if (!activeButton) return;
+
+      indicator.style.width = `${activeButton.offsetWidth}px`;
+      indicator.style.transform = `translate3d(${activeButton.offsetLeft}px, 0, 0)`;
+      indicator.style.opacity = "1";
+    };
+
+    updateIndicator();
+    const resizeObserver = new ResizeObserver(updateIndicator);
+    resizeObserver.observe(options);
+    return () => resizeObserver.disconnect();
+  }, [activeCategory]);
+
+  const updateCategoryState = useCallback(
+    (
+      category: CategoryFilter,
+      update: (state: CategoryState) => CategoryState
+    ) => {
+      setCategoryStates(previous => {
+        const next = {
+          ...previous,
+          [category]: update(previous[category]),
+        };
+        categoryStatesRef.current = next;
+        return next;
+      });
+    },
+    []
+  );
+
+  const fetchPage = useCallback((category: CategoryFilter, page: number) => {
+    const requestKey = `${category}-${page}`;
+    const existingRequest = requestRef.current.get(requestKey);
+    if (existingRequest) return existingRequest;
+
+    const url =
+      category === "all"
+        ? `/api/diary/${page}.json`
+        : `/api/diary/category/${category}/${page}.json`;
+    const request = fetch(url)
+      .then(async response => {
+        if (!response.ok) throw new Error("Failed to fetch diary entries");
+        return (await response.json()) as DiaryPageResponse;
+      })
+      .finally(() => requestRef.current.delete(requestKey));
+
+    requestRef.current.set(requestKey, request);
+    return request;
+  }, []);
+
+  const loadThroughPage = useCallback(
+    async (category: CategoryFilter, targetPage: number) => {
+      const categoryState = categoryStatesRef.current[category];
+      const lastPage = Math.min(targetPage, categoryState.totalPages);
+      const firstPage = categoryState.currentPage + 1;
+      if (firstPage > lastPage) return true;
+
+      startLoading();
+
+      try {
+        const pages = Array.from(
+          { length: lastPage - firstPage + 1 },
+          (_, index) => firstPage + index
+        );
+        const results = await Promise.all(
+          pages.map(page => fetchPage(category, page))
+        );
+        const entries = results.flatMap(result => result.entries);
+
+        updateCategoryState(category, previous => {
+          const knownDates = new Set(previous.entries.map(entry => entry.date));
+          return {
+            ...previous,
+            entries: [
+              ...previous.entries,
+              ...entries.filter(entry => !knownDates.has(entry.date)),
+            ],
+            currentPage: lastPage,
+            hasMore: lastPage < previous.totalPages,
+            initialized: true,
+          };
+        });
+        return true;
+      } catch (error) {
+        console.error("Error loading more entries:", error);
+        return false;
+      } finally {
+        finishLoading();
+      }
+    },
+    [fetchPage, finishLoading, startLoading, updateCategoryState]
+  );
+
+  const loadMore = useCallback(async () => {
+    const activeState = categoryStatesRef.current[activeCategory];
+    if (isLoadingRef.current || !activeState.hasMore) return;
+    await loadThroughPage(activeCategory, activeState.currentPage + 1);
+  }, [activeCategory, loadThroughPage]);
+
+  const activeState = categoryStates[activeCategory];
+  const displayedEntries = activeState.entries;
+  const hasMore = activeState.hasMore;
+
   useEffect(() => {
-    const feedElement = document.getElementById("diary-content");
-    if (feedElement) {
-      feedElement.setAttribute("aria-busy", isLoading.toString());
-    }
-  }, [isLoading]);
+    const sentinel = loadMoreSentinelRef.current;
+    if (!sentinel || !hasMore) return;
+
+    const observer = new IntersectionObserver(
+      entries => {
+        if (entries[0]?.isIntersecting) void loadMore();
+      },
+      { rootMargin: "0px 0px 600px 0px" }
+    );
+
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [hasMore, loadMore]);
+
+  const scrollToFeedStart = useCallback(() => {
+    requestAnimationFrame(() => {
+      const feed = document.getElementById("diary-feed");
+      if (!feed) return;
+
+      const reduceMotion = window.matchMedia(
+        "(prefers-reduced-motion: reduce)"
+      ).matches;
+      feed.scrollIntoView({
+        behavior: reduceMotion ? "auto" : "smooth",
+        block: "start",
+      });
+    });
+  }, []);
+
+  const commitCategoryTransition = useCallback(
+    (category: CategoryFilter, nextCategoryState?: CategoryState) => {
+      const commit = () => {
+        if (nextCategoryState) {
+          setCategoryStates(previous => {
+            const next = {
+              ...previous,
+              [category]: nextCategoryState,
+            };
+            categoryStatesRef.current = next;
+            return next;
+          });
+        }
+        setActiveCategory(category);
+      };
+
+      const reduceMotion = window.matchMedia(
+        "(prefers-reduced-motion: reduce)"
+      ).matches;
+      if (reduceMotion) {
+        commit();
+        return;
+      }
+
+      const previousRects = new Map(
+        Array.from(
+          document.querySelectorAll<HTMLElement>(
+            "#diary-feed > article[data-diary-date]"
+          )
+        ).map(entry => [
+          entry.dataset.diaryDate ?? "",
+          entry.getBoundingClientRect(),
+        ])
+      );
+
+      flushSync(commit);
+
+      requestAnimationFrame(() => {
+        const entries = Array.from(
+          document.querySelectorAll<HTMLElement>(
+            "#diary-feed > article[data-diary-date]"
+          )
+        );
+
+        entries.forEach(entry => {
+          const previousRect = previousRects.get(
+            entry.dataset.diaryDate ?? ""
+          );
+          if (!previousRect) return;
+
+          const currentRect = entry.getBoundingClientRect();
+          const offsetX = previousRect.left - currentRect.left;
+          const offsetY = previousRect.top - currentRect.top;
+          if (Math.abs(offsetX) < 1 && Math.abs(offsetY) < 1) return;
+
+          const content =
+            entry.querySelector<HTMLElement>(":scope > .date-group");
+          if (!content) return;
+          content.style.setProperty("--diary-flip-x", `${offsetX}px`);
+          content.style.setProperty("--diary-flip-y", `${offsetY}px`);
+          content.classList.add("diary-category-flip");
+        });
+
+        window.setTimeout(() => {
+          entries.forEach(entry => {
+            const content =
+              entry.querySelector<HTMLElement>(":scope > .date-group");
+            content?.classList.remove("diary-category-flip");
+            content?.style.removeProperty("--diary-flip-x");
+            content?.style.removeProperty("--diary-flip-y");
+          });
+        }, 360);
+      });
+    },
+    []
+  );
+
+  const applyFilters = useCallback(
+    async (category: CategoryFilter) => {
+      if (category === activeCategory) return;
+      pendingCategoryRef.current = category;
+      const categoryState = categoryStatesRef.current[category];
+      if (categoryState.initialized) {
+        commitCategoryTransition(category);
+        scrollToFeedStart();
+        return;
+      }
+
+      startLoading();
+      try {
+        const result = await fetchPage(category, 1);
+        const nextCategoryState: CategoryState = {
+          entries: result.entries,
+          currentPage: result.pagination.currentPage,
+          totalPages: result.pagination.totalPages,
+          hasMore: result.pagination.hasMore,
+          initialized: true,
+        };
+
+        if (pendingCategoryRef.current === category) {
+          commitCategoryTransition(category, nextCategoryState);
+          scrollToFeedStart();
+        } else {
+          updateCategoryState(category, () => nextCategoryState);
+        }
+      } catch (error) {
+        console.error("Error loading diary category:", error);
+      } finally {
+        finishLoading();
+      }
+    },
+    [
+      activeCategory,
+      commitCategoryTransition,
+      fetchPage,
+      finishLoading,
+      scrollToFeedStart,
+      startLoading,
+      updateCategoryState,
+    ]
+  );
+
+  const jumpToMonth = useCallback(
+    async (month: ArchiveMonth) => {
+      setActivePeriod(month.value);
+      setActiveCategory("all");
+      setIsPeriodMenuOpen(false);
+      pendingTargetDateRef.current = month.targetDate;
+
+      const loaded = await loadThroughPage("all", month.page);
+      if (!loaded) pendingTargetDateRef.current = null;
+
+      requestAnimationFrame(() => {
+        const target = document.getElementById(`entry-${month.targetDate}`);
+        if (!target) return;
+        target.scrollIntoView({
+          behavior: "instant" as ScrollBehavior,
+          block: "start",
+        });
+      });
+    },
+    [loadThroughPage]
+  );
+
+  useEffect(() => {
+    const targetDate = pendingTargetDateRef.current;
+    if (!targetDate) return;
+    const target = document.getElementById(`entry-${targetDate}`);
+    if (!target) return;
+
+    pendingTargetDateRef.current = null;
+    requestAnimationFrame(() => {
+      target.scrollIntoView({
+        behavior: "instant" as ScrollBehavior,
+        block: "start",
+      });
+    });
+  }, [displayedEntries]);
+
+  useEffect(() => {
+    const entries = Array.from(
+      document.querySelectorAll<HTMLElement>("[data-diary-date]")
+    );
+    if (entries.length === 0) return;
+
+    const observer = new IntersectionObserver(
+      visibleEntries => {
+        const visible = visibleEntries
+          .filter(entry => entry.isIntersecting)
+          .sort(
+            (a, b) => a.boundingClientRect.top - b.boundingClientRect.top
+          )[0];
+        const date = visible?.target.getAttribute("data-diary-date");
+        if (date) setActivePeriod(date.slice(0, 7));
+      },
+      { rootMargin: "-15% 0px -70% 0px" }
+    );
+
+    entries.forEach(entry => observer.observe(entry));
+    return () => observer.disconnect();
+  }, [displayedEntries]);
+
+  const filterDescription =
+    activeCategory === "all"
+      ? `显示 ${displayedEntries.length} 条已加载记录`
+      : `已加载 ${displayedEntries.length} 条筛选结果`;
+  const selectedMonth = archiveGroups
+    .flatMap(group => group.months)
+    .find(month => month.value === activePeriod);
 
   return (
-    <>
-      {displayedEntries.map((entry, index) => (
-        <article
-          key={`${entry.date}-${index}`}
-          role="article"
-          aria-labelledby={`date-${entry.date}`}
-          aria-describedby={`content-${entry.date}`}
-          tabIndex={0}
-          className={`${riverMode ? "time-river-entry" : ""} focus:ring-skin-accent focus:ring-offset-skin-fill rounded-lg focus:outline-none`}
+    <div className="diary-timeline-experience">
+      <div className="diary-toolbar">
+        <section
+          className="diary-filter-panel"
+          aria-labelledby="diary-filter-heading"
         >
-          <DiaryEntryReact
-            date={entry.date}
-            hideYear={hideYear}
-            timeBlocks={entry.timeBlocks}
-            riverMode={riverMode}
-          />
-        </article>
-      ))}
-
-      {displayedEntries.length === 0 && (
-        <article role="article" className="py-12 text-center">
-          <div role="status" aria-live="polite">
-            <p className="text-skin-base opacity-60">还没有任何日记...</p>
-          </div>
-        </article>
-      )}
-
-      {isLoading && (
-        <article role="article" className="loading py-8 text-center">
+          <h2 id="diary-filter-heading" className="sr-only">
+            按内容类型筛选时间档案
+          </h2>
+          <p className="sr-only" aria-live="polite">
+            {filterDescription}
+          </p>
           <div
-            role="status"
-            aria-live="assertive"
-            aria-label="正在加载更多日记条目"
+            ref={filterOptionsRef}
+            className="diary-filter-options"
+            aria-label="按内容类型筛选"
           >
-            <p className="text-skin-base opacity-60">加载中...</p>
-            <div className="sr-only">正在为您加载更多日记内容，请稍候</div>
+            <span
+              ref={filterIndicatorRef}
+              className="diary-filter-active-indicator"
+              aria-hidden="true"
+            />
+            {CATEGORY_OPTIONS.map(option => (
+              <button
+                key={option.value}
+                type="button"
+                data-category={option.value}
+                aria-pressed={activeCategory === option.value}
+                onClick={() => void applyFilters(option.value)}
+              >
+                {option.label}
+              </button>
+            ))}
           </div>
-        </article>
-      )}
+        </section>
 
-      {!hasMore && displayedEntries.length > 0 && (
-        <article role="article" className="no-more py-8 text-center">
-          <div role="status" aria-live="polite">
-            <p className="text-skin-base opacity-60">没有更多内容了</p>
+        {archiveGroups.length > 0 && (
+          <div className="diary-period-picker" ref={periodPickerRef}>
+            <button
+              ref={periodTriggerRef}
+              type="button"
+              className="diary-period-trigger"
+              aria-haspopup="dialog"
+              aria-expanded={isPeriodMenuOpen}
+              aria-controls="diary-period-menu"
+              onClick={() => setIsPeriodMenuOpen(open => !open)}
+              onKeyDown={event => {
+                if (event.key === "ArrowDown") {
+                  event.preventDefault();
+                  setIsPeriodMenuOpen(true);
+                }
+              }}
+            >
+              <span className="diary-period-trigger-label">时间</span>
+              <span>{selectedMonth?.value.replace("-", "年")}月</span>
+              <span className="diary-period-chevron" aria-hidden="true" />
+            </button>
+
+            {isPeriodMenuOpen && (
+              <div
+                id="diary-period-menu"
+                className="diary-period-menu"
+                role="dialog"
+                aria-label="选择要跳转的年份和月份"
+              >
+                <div className="diary-period-menu-header">
+                  <strong>时间导航</strong>
+                  <span>最新记录在前</span>
+                </div>
+                <div className="diary-period-menu-content">
+                  {archiveGroups.map(group => (
+                    <div className="diary-period-year" key={group.year}>
+                      <span>{group.year}</span>
+                      <div>
+                        {group.months.map(month => (
+                          <button
+                            key={month.value}
+                            type="button"
+                            className={
+                              activePeriod === month.value ? "is-active" : ""
+                            }
+                            aria-current={
+                              activePeriod === month.value ? "date" : undefined
+                            }
+                            onClick={() => void jumpToMonth(month)}
+                          >
+                            {month.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      <div
+        id="diary-feed"
+        role="feed"
+        aria-label="按时间倒序排列的日记时间线"
+        aria-describedby="diary-description"
+        aria-live="polite"
+        aria-busy={isLoading}
+      >
+        {displayedEntries.map(entry => (
+          <article
+            id={`entry-${entry.date}`}
+            data-diary-date={entry.date}
+            key={entry.date}
+            role="article"
+            aria-labelledby={`date-${entry.date}`}
+            aria-describedby={`content-${entry.date}`}
+            tabIndex={0}
+            className={`${riverMode ? "time-river-entry" : ""} diary-feed-entry focus:ring-skin-accent focus:ring-offset-skin-fill rounded-lg focus:outline-none`}
+          >
+            <DiaryEntryReact
+              date={entry.date}
+              hideYear={hideYear}
+              timeBlocks={entry.timeBlocks}
+              riverMode={riverMode}
+            />
+          </article>
+        ))}
+
+        <div ref={loadMoreSentinelRef} className="h-px" aria-hidden="true" />
+
+        {displayedEntries.length === 0 && !isLoading && (
+          <div role="status" className="py-12 text-center">
+            <p className="text-skin-base opacity-60">
+              {activeCategory === "all"
+                ? "还没有任何日记..."
+                : "没有符合当前筛选条件的记录"}
+            </p>
+          </div>
+        )}
+
+        {isLoading && (
+          <div className="loading py-8 text-center" role="status">
+            <p className="text-skin-base opacity-60">正在加载时间档案...</p>
+          </div>
+        )}
+
+        {!hasMore && displayedEntries.length > 0 && (
+          <div className="no-more py-8 text-center" role="status">
+            <p className="text-skin-base opacity-60">
+              {activeCategory === "all"
+                ? "没有更多内容了"
+                : "没有更多筛选结果了"}
+            </p>
             <div className="sr-only">
               已显示全部 {displayedEntries.length} 条日记记录
             </div>
           </div>
-        </article>
-      )}
+        )}
 
-      {/* 手动加载更多按钮，为键盘用户提供替代方案 */}
-      {hasMore && !isLoading && (
-        <article role="article" className="py-8 text-center">
-          <button
-            onClick={loadMore}
-            className="bg-skin-accent text-skin-inverted hover:bg-skin-accent/90 focus:ring-skin-accent focus:ring-offset-skin-fill rounded-lg px-6 py-3 transition-colors focus:outline-none"
-            aria-describedby="load-more-description"
-          >
-            加载更多日记
-          </button>
-          <div id="load-more-description" className="sr-only">
-            点击此按钮加载更多日记条目，或继续向下滚动自动加载
+        {hasMore && !isLoading && (
+          <div className="py-8 text-center">
+            <button
+              onClick={loadMore}
+              className="bg-skin-accent text-skin-inverted hover:bg-skin-accent/90 focus:ring-skin-accent focus:ring-offset-skin-fill rounded-lg px-6 py-3 transition-colors focus:outline-none"
+              aria-describedby="load-more-description"
+            >
+              {activeCategory === "all" ? "加载更多日记" : "加载更多筛选结果"}
+            </button>
+            <div id="load-more-description" className="sr-only">
+              点击加载更早的日记条目，或继续向下滚动自动加载
+            </div>
           </div>
-        </article>
-      )}
-    </>
+        )}
+      </div>
+    </div>
   );
 };
 

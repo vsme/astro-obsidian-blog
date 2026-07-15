@@ -5,8 +5,8 @@ import React, {
   useRef,
   useState,
 } from "react";
-import { flushSync } from "react-dom";
 import DiaryEntryReact, { type TimeBlock } from "./DiaryEntryReact";
+import { entryMatchesDiaryCategory } from "@/utils/diaryCategories";
 
 export interface ParsedEntry {
   date: string;
@@ -37,7 +37,7 @@ export interface DiaryTimelineProps {
   paginationInfo: PaginationInfo;
   archiveGroups?: ArchiveGroup[];
   hideYear?: boolean;
-  riverMode?: boolean;
+  localFiltering?: boolean;
 }
 
 type CategoryFilter = "all" | "daily" | "reading" | "watching" | "music";
@@ -65,6 +65,19 @@ const CATEGORY_OPTIONS: Array<{ value: CategoryFilter; label: string }> = [
   { value: "music", label: "音乐" },
 ];
 
+const VIEW_LOADING_MIN_DURATION = 320;
+
+const waitForLayout = () =>
+  new Promise<void>(resolve => {
+    requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+  });
+
+const waitForMinimumLoading = async (startedAt: number) => {
+  const remaining = VIEW_LOADING_MIN_DURATION - (performance.now() - startedAt);
+  if (remaining <= 0) return;
+  await new Promise<void>(resolve => window.setTimeout(resolve, remaining));
+};
+
 const DiaryTimeline: React.FC<DiaryTimelineProps> = ({
   initialEntries = [],
   paginationInfo = {
@@ -75,8 +88,22 @@ const DiaryTimeline: React.FC<DiaryTimelineProps> = ({
   },
   archiveGroups = [],
   hideYear = false,
-  riverMode = false,
+  localFiltering = false,
 }) => {
+  const createCategoryState = (
+    category: Exclude<CategoryFilter, "all">
+  ): CategoryState => ({
+    entries: localFiltering
+      ? initialEntries.filter(entry =>
+          entryMatchesDiaryCategory(entry, category)
+        )
+      : [],
+    currentPage: localFiltering ? 1 : 0,
+    totalPages: localFiltering ? 1 : 0,
+    hasMore: false,
+    initialized: localFiltering,
+  });
+
   const initialCategoryStates: CategoryStates = {
     all: {
       entries: initialEntries || [],
@@ -85,39 +112,17 @@ const DiaryTimeline: React.FC<DiaryTimelineProps> = ({
       hasMore: paginationInfo?.hasMore || false,
       initialized: true,
     },
-    daily: {
-      entries: [],
-      currentPage: 0,
-      totalPages: 0,
-      hasMore: false,
-      initialized: false,
-    },
-    reading: {
-      entries: [],
-      currentPage: 0,
-      totalPages: 0,
-      hasMore: false,
-      initialized: false,
-    },
-    watching: {
-      entries: [],
-      currentPage: 0,
-      totalPages: 0,
-      hasMore: false,
-      initialized: false,
-    },
-    music: {
-      entries: [],
-      currentPage: 0,
-      totalPages: 0,
-      hasMore: false,
-      initialized: false,
-    },
+    daily: createCategoryState("daily"),
+    reading: createCategoryState("reading"),
+    watching: createCategoryState("watching"),
+    music: createCategoryState("music"),
   };
   const [categoryStates, setCategoryStates] = useState<CategoryStates>(
     initialCategoryStates
   );
   const [isLoading, setIsLoading] = useState(false);
+  const [isViewTransitioning, setIsViewTransitioning] = useState(false);
+  const [hasCategoryInteracted, setHasCategoryInteracted] = useState(false);
   const [activeCategory, setActiveCategory] = useState<CategoryFilter>("all");
   const [activePeriod, setActivePeriod] = useState(
     archiveGroups[0]?.months[0]?.value ?? ""
@@ -128,6 +133,7 @@ const DiaryTimeline: React.FC<DiaryTimelineProps> = ({
   const isLoadingRef = useRef(false);
   const loadingCountRef = useRef(0);
   const categoryStatesRef = useRef<CategoryStates>(initialCategoryStates);
+  const viewTransitionIdRef = useRef(0);
   const targetAlignmentFrameRef = useRef<number | null>(null);
   const targetAlignmentTimeoutRef = useRef<number | null>(null);
   const pendingCategoryRef = useRef<CategoryFilter>("all");
@@ -307,77 +313,18 @@ const DiaryTimeline: React.FC<DiaryTimelineProps> = ({
 
   const commitCategoryTransition = useCallback(
     (category: CategoryFilter, nextCategoryState?: CategoryState) => {
-      const commit = () => {
-        if (nextCategoryState) {
-          setCategoryStates(previous => {
-            const next = {
-              ...previous,
-              [category]: nextCategoryState,
-            };
-            categoryStatesRef.current = next;
-            return next;
-          });
-        }
-        setActiveCategory(category);
-      };
-
-      const reduceMotion = window.matchMedia(
-        "(prefers-reduced-motion: reduce)"
-      ).matches;
-      if (reduceMotion) {
-        commit();
-        return;
-      }
-
-      const previousRects = new Map(
-        Array.from(
-          document.querySelectorAll<HTMLElement>(
-            "#diary-feed > article[data-diary-date]"
-          )
-        ).map(entry => [
-          entry.dataset.diaryDate ?? "",
-          entry.getBoundingClientRect(),
-        ])
-      );
-
-      flushSync(commit);
-
-      requestAnimationFrame(() => {
-        const entries = Array.from(
-          document.querySelectorAll<HTMLElement>(
-            "#diary-feed > article[data-diary-date]"
-          )
-        );
-
-        entries.forEach(entry => {
-          const previousRect = previousRects.get(
-            entry.dataset.diaryDate ?? ""
-          );
-          if (!previousRect) return;
-
-          const currentRect = entry.getBoundingClientRect();
-          const offsetX = previousRect.left - currentRect.left;
-          const offsetY = previousRect.top - currentRect.top;
-          if (Math.abs(offsetX) < 1 && Math.abs(offsetY) < 1) return;
-
-          const content =
-            entry.querySelector<HTMLElement>(":scope > .date-group");
-          if (!content) return;
-          content.style.setProperty("--diary-flip-x", `${offsetX}px`);
-          content.style.setProperty("--diary-flip-y", `${offsetY}px`);
-          content.classList.add("diary-category-flip");
+      if (nextCategoryState) {
+        setCategoryStates(previous => {
+          const next = {
+            ...previous,
+            [category]: nextCategoryState,
+          };
+          categoryStatesRef.current = next;
+          return next;
         });
-
-        window.setTimeout(() => {
-          entries.forEach(entry => {
-            const content =
-              entry.querySelector<HTMLElement>(":scope > .date-group");
-            content?.classList.remove("diary-category-flip");
-            content?.style.removeProperty("--diary-flip-x");
-            content?.style.removeProperty("--diary-flip-y");
-          });
-        }, 360);
-      });
+      }
+      setHasCategoryInteracted(true);
+      setActiveCategory(category);
     },
     []
   );
@@ -391,13 +338,9 @@ const DiaryTimeline: React.FC<DiaryTimelineProps> = ({
   }, []);
 
   const alignFeedStartBelowToolbar = useCallback(() => {
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        document.getElementById("diary-feed")?.scrollIntoView({
-          behavior: "instant" as ScrollBehavior,
-          block: "start",
-        });
-      });
+    document.getElementById("diary-feed")?.scrollIntoView({
+      behavior: "instant" as ScrollBehavior,
+      block: "start",
     });
   }, []);
 
@@ -413,12 +356,15 @@ const DiaryTimeline: React.FC<DiaryTimelineProps> = ({
   }, []);
 
   const alignTargetBelowToolbar = useCallback(
-    (targetDate: string) => {
+    (targetDate: string, onAligned?: () => void) => {
       cancelTargetAlignment();
 
       const align = () => {
         const target = document.getElementById(`entry-${targetDate}`);
-        if (!target) return;
+        if (!target) {
+          onAligned?.();
+          return;
+        }
 
         const documentTop = target.getBoundingClientRect().top + window.scrollY;
         const scrollMarginTop = Number.parseFloat(
@@ -445,6 +391,7 @@ const DiaryTimeline: React.FC<DiaryTimelineProps> = ({
             behavior: "instant" as ScrollBehavior,
           });
         }
+        onAligned?.();
       };
 
       // Let newly mounted media cards finish their first layout before the
@@ -467,40 +414,52 @@ const DiaryTimeline: React.FC<DiaryTimelineProps> = ({
   const applyFilters = useCallback(
     async (category: CategoryFilter) => {
       if (category === activeCategory) return;
-      setActiveJumpTarget(null);
-      const keepToolbarPinned = isToolbarPinned();
-      pendingCategoryRef.current = category;
-      const categoryState = categoryStatesRef.current[category];
-      if (categoryState.initialized) {
+      if (localFiltering) {
+        setActiveJumpTarget(null);
         commitCategoryTransition(category);
-        if (keepToolbarPinned) alignFeedStartBelowToolbar();
         return;
       }
 
-      startLoading();
-      let alignAfterLoading = false;
-      try {
-        const result = await fetchPage(category, 1);
-        const nextCategoryState: CategoryState = {
-          entries: result.entries,
-          currentPage: result.pagination.currentPage,
-          totalPages: result.pagination.totalPages,
-          hasMore: result.pagination.hasMore,
-          initialized: true,
-        };
+      const transitionId = ++viewTransitionIdRef.current;
+      const startedAt = performance.now();
+      setIsViewTransitioning(true);
+      setActiveJumpTarget(null);
+      const keepToolbarPinned = isToolbarPinned();
+      pendingCategoryRef.current = category;
+      await waitForLayout();
 
-        if (pendingCategoryRef.current === category) {
-          commitCategoryTransition(category, nextCategoryState);
-          alignAfterLoading = keepToolbarPinned;
-        } else {
-          updateCategoryState(category, () => nextCategoryState);
+      const categoryState = categoryStatesRef.current[category];
+      if (categoryState.initialized) {
+        commitCategoryTransition(category);
+      } else {
+        startLoading();
+        try {
+          const result = await fetchPage(category, 1);
+          const nextCategoryState: CategoryState = {
+            entries: result.entries,
+            currentPage: result.pagination.currentPage,
+            totalPages: result.pagination.totalPages,
+            hasMore: result.pagination.hasMore,
+            initialized: true,
+          };
+
+          if (pendingCategoryRef.current === category) {
+            commitCategoryTransition(category, nextCategoryState);
+          } else {
+            updateCategoryState(category, () => nextCategoryState);
+          }
+        } catch (error) {
+          console.error("Error loading diary category:", error);
+        } finally {
+          finishLoading();
         }
-      } catch (error) {
-        console.error("Error loading diary category:", error);
-      } finally {
-        finishLoading();
       }
-      if (alignAfterLoading) alignFeedStartBelowToolbar();
+
+      await waitForLayout();
+      await waitForMinimumLoading(startedAt);
+      if (transitionId !== viewTransitionIdRef.current) return;
+      if (keepToolbarPinned) alignFeedStartBelowToolbar();
+      setIsViewTransitioning(false);
     },
     [
       activeCategory,
@@ -509,6 +468,7 @@ const DiaryTimeline: React.FC<DiaryTimelineProps> = ({
       fetchPage,
       finishLoading,
       isToolbarPinned,
+      localFiltering,
       startLoading,
       updateCategoryState,
     ]
@@ -516,14 +476,36 @@ const DiaryTimeline: React.FC<DiaryTimelineProps> = ({
 
   const jumpToMonth = useCallback(
     async (month: ArchiveMonth) => {
+      const transitionId = ++viewTransitionIdRef.current;
+      const startedAt = performance.now();
       cancelTargetAlignment();
+      setIsViewTransitioning(true);
+      setIsPeriodMenuOpen(false);
+      pendingCategoryRef.current = "all";
+
+      await waitForLayout();
+
+      const loaded = await loadThroughPage("all", month.page);
+      await waitForMinimumLoading(startedAt);
+      if (transitionId !== viewTransitionIdRef.current) return;
+
+      if (!loaded) {
+        setIsViewTransitioning(false);
+        return;
+      }
+
+      setHasCategoryInteracted(true);
       setActivePeriod(month.value);
       setActiveJumpTarget(month.targetDate);
       setActiveCategory("all");
-      setIsPeriodMenuOpen(false);
+      await waitForLayout();
+      if (transitionId !== viewTransitionIdRef.current) return;
 
-      const loaded = await loadThroughPage("all", month.page);
-      if (loaded) alignTargetBelowToolbar(month.targetDate);
+      alignTargetBelowToolbar(month.targetDate, () => {
+        if (transitionId === viewTransitionIdRef.current) {
+          setIsViewTransitioning(false);
+        }
+      });
     },
     [alignTargetBelowToolbar, cancelTargetAlignment, loadThroughPage]
   );
@@ -588,12 +570,23 @@ const DiaryTimeline: React.FC<DiaryTimelineProps> = ({
                 type="button"
                 data-category={option.value}
                 aria-pressed={activeCategory === option.value}
+                disabled={isViewTransitioning}
                 onClick={() => void applyFilters(option.value)}
               >
                 {option.label}
               </button>
             ))}
           </div>
+          {isViewTransitioning && (
+            <span
+              className="diary-filter-loading"
+              role="status"
+              aria-live="polite"
+            >
+              <span className="diary-filter-spinner" aria-hidden="true" />
+              加载中…
+            </span>
+          )}
         </section>
 
         {archiveGroups.length > 0 && (
@@ -605,6 +598,7 @@ const DiaryTimeline: React.FC<DiaryTimelineProps> = ({
               aria-haspopup="dialog"
               aria-expanded={isPeriodMenuOpen}
               aria-controls="diary-period-menu"
+              disabled={isViewTransitioning}
               onClick={() => setIsPeriodMenuOpen(open => !open)}
               onKeyDown={event => {
                 if (event.key === "ArrowDown") {
@@ -662,11 +656,12 @@ const DiaryTimeline: React.FC<DiaryTimelineProps> = ({
 
       <div
         id="diary-feed"
+        className={`${hasCategoryInteracted ? "diary-category-interacted" : ""} ${isViewTransitioning ? "diary-view-transitioning" : ""}`}
         role="feed"
         aria-label="按时间倒序排列的日记时间线"
         aria-describedby="diary-description"
         aria-live="polite"
-        aria-busy={isLoading}
+        aria-busy={isLoading || isViewTransitioning}
       >
         {displayedEntries.map(entry => (
           <article
@@ -677,13 +672,12 @@ const DiaryTimeline: React.FC<DiaryTimelineProps> = ({
             aria-labelledby={`date-${entry.date}`}
             aria-describedby={`content-${entry.date}`}
             tabIndex={0}
-            className={`${riverMode ? "time-river-entry" : ""} ${activeJumpTarget === entry.date ? "is-time-jump-target" : ""} diary-feed-entry focus:ring-skin-accent focus:ring-offset-skin-fill rounded-lg focus:outline-none`}
+            className={`time-river-entry ${activeJumpTarget === entry.date ? "is-time-jump-target" : ""} diary-feed-entry focus:ring-skin-accent focus:ring-offset-skin-fill rounded-lg focus:outline-none`}
           >
             <DiaryEntryReact
               date={entry.date}
               hideYear={hideYear}
               timeBlocks={entry.timeBlocks}
-              riverMode={riverMode}
             />
           </article>
         ))}

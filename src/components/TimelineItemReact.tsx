@@ -22,7 +22,6 @@ export interface TimelineItemProps {
   }>;
   htmlContent?: string;
   mediaCards?: MediaCardItem[];
-  riverMode?: boolean;
 }
 
 const TimelineItemReact: React.FC<TimelineItemProps> = ({
@@ -32,7 +31,6 @@ const TimelineItemReact: React.FC<TimelineItemProps> = ({
   images = [],
   htmlContent,
   mediaCards,
-  riverMode = false,
 }) => {
   const galleryRef = useRef<HTMLDivElement>(null);
   const lightGalleryRef = useRef<{ destroy: () => void } | null>(null);
@@ -117,24 +115,18 @@ const TimelineItemReact: React.FC<TimelineItemProps> = ({
   }, [isImagesLoaded, optimizedImages]);
   return (
     <article
-      className={`${riverMode ? "time-river-timeline-item" : ""} mb-6 border-b border-dashed border-border/30 pb-6 last:border-b-0 last:pb-0`}
+      className="mb-6 border-b border-dashed border-border/30 pb-6 last:border-b-0 last:pb-0"
       tabIndex={0}
       role="article"
       aria-label={`${time} 时间段的记录`}
     >
       <div className="content group transition-all duration-300">
         {/* 时间和内容整合显示 */}
-        <div
-          className={
-            riverMode
-              ? "time-river-timeline-row relative"
-              : "flex items-start gap-3"
-          }
-        >
+        <div className="time-river-timeline-row relative">
           {/* 时间标签 - 使用h3标题以便Pagefind识别为子结果 */}
           <h3
             id={date ? `diary-${date}-${time.replace(/:/g, "-")}` : undefined}
-            className={`${riverMode ? "sr-only" : "flex-shrink-0 pr-2 pl-0"} text-skin-base/60 m-0 text-base font-medium`}
+            className="sr-only"
             aria-label={`${time} 时间段的记录`}
           >
             <span className="sr-only">{date}</span>

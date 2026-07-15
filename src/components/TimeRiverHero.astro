@@ -32,7 +32,7 @@ const { totalEntries } = Astro.props;
     z-index: 0;
     display: block;
     width: 100%;
-    margin: -4.5rem auto 0;
+    margin: -3rem auto 0;
   }
 
   .time-river-hero {
@@ -42,7 +42,7 @@ const { totalEntries } = Astro.props;
     width: 100%;
     max-width: none;
     margin: 0;
-    min-height: clamp(11rem, 25svh, 15rem);
+    min-height: 11rem;
     overflow: hidden;
   }
 
@@ -87,7 +87,7 @@ const { totalEntries } = Astro.props;
     width: 100%;
     max-width: 48rem;
     margin: auto;
-    padding: 2.5rem 1rem 1.75rem;
+    padding: 0rem 1rem 1.75rem;
     pointer-events: none;
   }
 
@@ -119,11 +119,11 @@ const { totalEntries } = Astro.props;
 
   @media (max-width: 639px) {
     time-river-hero {
-      margin-top: -5rem;
+      margin-top: -3.25rem;
     }
 
     .time-river-hero {
-      min-height: clamp(10rem, 24svh, 13rem);
+      min-height: 10rem;
     }
 
     .time-river-copy {
@@ -146,6 +146,7 @@ const { totalEntries } = Astro.props;
   const TURBULENCE_DARK = 4.0;
   const SPECULAR_INTENSITY = 0.14;
   const SPECULAR_INTENSITY_LIGHT = 0.14;
+  const RIVER_DEPTH = 64;
   const MAX_TRAILS = 10;
   const TRAIL_LIFETIME = 1800;
   const TRAIL_SAMPLE_INTERVAL = 38;
@@ -189,7 +190,7 @@ const { totalEntries } = Astro.props;
 
     const int MAX_TRAILS = ${MAX_TRAILS};
     const float PLANE_WIDTH = 240.0;
-    const float PLANE_DEPTH = 48.0;
+    const float PLANE_DEPTH = ${RIVER_DEPTH.toFixed(1)};
 
     in vec2 aPosition;
     in vec2 aUv;
@@ -729,7 +730,7 @@ const { totalEntries } = Astro.props;
       if (!this.gl || !this.program || !this.vertexArray) return false;
 
       const width = 240;
-      const depth = 48;
+      const depth = RIVER_DEPTH;
       const segmentsX = 250;
       const segmentsZ = 45;
       const positions: number[] = [];

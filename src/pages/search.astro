@@ -15,11 +15,122 @@ import { SITE } from "@/config";
       className="pagefind-ui"
       uiOptions={{ showImages: false, showSubResults: true }}
     />
+    <section
+      id="search-history"
+      class="search-history"
+      aria-labelledby="search-history-heading"
+      hidden
+    >
+      <div class="search-history__header">
+        <h2 id="search-history-heading">最近搜索</h2>
+        <button id="search-history-clear" type="button">清空</button>
+      </div>
+      <div
+        id="search-history-list"
+        class="search-history__list"
+        aria-label="最近搜索记录"
+      >
+      </div>
+    </section>
   </Main>
   <Footer />
 </Layout>
 
 <script>
+  const SEARCH_HISTORY_KEY = "astro-paper:search-history";
+  const SEARCH_HISTORY_LIMIT = 30;
+
+  function readSearchHistory(): string[] {
+    try {
+      const history = JSON.parse(
+        window.localStorage.getItem(SEARCH_HISTORY_KEY) ?? "[]"
+      );
+      return Array.isArray(history)
+        ? history
+            .filter(item => typeof item === "string")
+            .slice(0, SEARCH_HISTORY_LIMIT)
+        : [];
+    } catch {
+      return [];
+    }
+  }
+
+  function writeSearchHistory(history: string[]) {
+    try {
+      window.localStorage.setItem(
+        SEARCH_HISTORY_KEY,
+        JSON.stringify(history.slice(0, SEARCH_HISTORY_LIMIT))
+      );
+    } catch {
+      // 浏览器禁用本地存储时，搜索功能仍可正常使用
+    }
+  }
+
+  function addSearchHistory(query: string) {
+    const normalizedQuery = query.trim().replace(/\s+/g, " ");
+    if (!normalizedQuery) return;
+
+    const normalizedKey = normalizedQuery.toLocaleLowerCase();
+    const history = readSearchHistory().filter(
+      item => item.toLocaleLowerCase() !== normalizedKey
+    );
+    writeSearchHistory([normalizedQuery, ...history]);
+  }
+
+  function deleteSearchHistory(query: string) {
+    const normalizedKey = query.toLocaleLowerCase();
+    writeSearchHistory(
+      readSearchHistory().filter(
+        item => item.toLocaleLowerCase() !== normalizedKey
+      )
+    );
+  }
+
+  function renderSearchHistory(searchInput: HTMLInputElement) {
+    const historyPanel = document.querySelector(
+      "#search-history"
+    ) as HTMLElement | null;
+    const historyList = document.querySelector(
+      "#search-history-list"
+    ) as HTMLElement | null;
+    if (!historyPanel || !historyList) return;
+
+    const history = readSearchHistory();
+    historyPanel.hidden =
+      history.length === 0 || searchInput.value.trim().length > 0;
+    historyList.replaceChildren();
+
+    history.forEach(query => {
+      const entry = document.createElement("span");
+      entry.className = "search-history__entry";
+
+      const searchButton = document.createElement("button");
+      searchButton.type = "button";
+      searchButton.className = "search-history__item";
+      searchButton.textContent = query;
+      searchButton.title = `再次搜索：${query}`;
+      searchButton.addEventListener("click", () => {
+        searchInput.value = query;
+        searchInput.dispatchEvent(new Event("input", { bubbles: true }));
+        searchInput.focus();
+      });
+
+      const deleteButton = document.createElement("button");
+      deleteButton.type = "button";
+      deleteButton.className = "search-history__delete";
+      deleteButton.textContent = "×";
+      deleteButton.title = `删除搜索记录：${query}`;
+      deleteButton.setAttribute("aria-label", `删除搜索记录：${query}`);
+      deleteButton.addEventListener("click", () => {
+        deleteSearchHistory(query);
+        renderSearchHistory(searchInput);
+      });
+
+      entry.append(searchButton, deleteButton);
+      historyList.append(entry);
+    });
+  }
+
   // 浏览器端处理URL参数和搜索状态保持
   function initSearchFromURL() {
     const searchInput = document.querySelector(
@@ -28,8 +139,26 @@ import { SITE } from "@/config";
 
     if (!searchInput) {
       // 如果搜索组件还没有加载，延迟重试
-      setTimeout(initSearchFromURL, 100);
+      if (window.location.pathname === "/search") {
+        setTimeout(initSearchFromURL, 100);
+      }
       return;
+    }
+
+    if (searchInput.dataset.searchHistoryInitialized === "true") return;
+    searchInput.dataset.searchHistoryInitialized = "true";
+
+    const searchForm = searchInput.closest("form");
+    const searchRoot = searchInput.closest(".pagefind-ui");
+    const historyPanel = document.querySelector(
+      "#search-history"
+    ) as HTMLElement | null;
+    const clearHistoryButton = document.querySelector(
+      "#search-history-clear"
+    ) as HTMLButtonElement | null;
+
+    if (searchForm && historyPanel) {
+      searchForm.insertAdjacentElement("afterend", historyPanel);
     }
 
     // 从URL参数中获取搜索查询
@@ -38,10 +167,13 @@ import { SITE } from "@/config";
 
     if (query) {
       // 设置搜索框的值
-      searchInput.value = decodeURIComponent(query);
+      searchInput.value = query;
       // 触发搜索
       searchInput.dispatchEvent(new Event("input", { bubbles: true }));
+      addSearchHistory(query);
     }
+
+    renderSearchHistory(searchInput);
 
     // 监听搜索输入变化，同步到 URL
     let debounceTimer: number | undefined;
@@ -64,6 +196,34 @@ import { SITE } from "@/config";
       const target = e.target as HTMLInputElement;
       if (!target) return;
       updateURL(target.value);
+      renderSearchHistory(searchInput);
+    });
+
+    searchInput.addEventListener("keydown", event => {
+      if (event.key !== "Enter" || event.isComposing) return;
+      addSearchHistory(searchInput.value);
+      renderSearchHistory(searchInput);
+    });
+
+    searchForm?.addEventListener("submit", () => {
+      addSearchHistory(searchInput.value);
+      renderSearchHistory(searchInput);
+    });
+
+    searchRoot?.addEventListener("click", event => {
+      const target = event.target as HTMLElement;
+      if (!target.closest(".pagefind-ui__result-link")) return;
+      addSearchHistory(searchInput.value);
+    });
+
+    clearHistoryButton?.addEventListener("click", () => {
+      try {
+        window.localStorage.removeItem(SEARCH_HISTORY_KEY);
+      } catch {
+        // 浏览器禁用本地存储时无需处理
+      }
+      renderSearchHistory(searchInput);
+      searchInput.focus();
     });
 
     // 监听清空按钮点击事件
@@ -73,6 +233,7 @@ import { SITE } from "@/config";
     if (clearButton) {
       clearButton.addEventListener("click", () => {
         updateURL("");
+        requestAnimationFrame(() => renderSearchHistory(searchInput));
       });
     }
   }
@@ -130,5 +291,117 @@ import { SITE } from "@/config";
 
   .pagefind-ui__result-nested .pagefind-ui__result-link:before {
     font-family: system-ui;
+  }
+
+  .search-history {
+    margin-top: 1rem;
+    padding-bottom: 0.5rem;
+    font-family: var(--font-mono);
+  }
+
+  .search-history__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 0.7rem;
+  }
+
+  .search-history__header h2 {
+    margin: 0;
+    color: color-mix(in srgb, var(--foreground) 48%, transparent);
+    font-size: 0.68rem;
+    font-weight: 500;
+    letter-spacing: 0.04em;
+  }
+
+  .search-history__header button {
+    border: 0;
+    background: transparent;
+    color: color-mix(in srgb, var(--foreground) 42%, transparent);
+    font-size: 0.66rem;
+  }
+
+  .search-history__header button:hover,
+  .search-history__header button:focus-visible {
+    color: var(--accent);
+  }
+
+  .search-history__list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.55rem 0.6rem;
+  }
+
+  .search-history__entry {
+    display: inline-flex;
+    align-items: stretch;
+    max-width: 100%;
+    overflow: hidden;
+    border: 1px solid color-mix(in srgb, var(--border) 68%, transparent);
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--foreground) 3%, transparent);
+    transition:
+      border-color 150ms ease,
+      background-color 150ms ease;
+  }
+
+  .search-history__item {
+    min-width: 0;
+    padding: 0.42rem 0rem 0.42rem 0.75rem;
+    overflow: hidden;
+    border: 0;
+    background: transparent;
+    color: color-mix(in srgb, var(--foreground) 64%, transparent);
+    font-size: 0.72rem;
+    line-height: 1.35;
+    text-overflow: ellipsis;
+    transition: color 150ms ease;
+    white-space: nowrap;
+  }
+
+  .search-history__delete {
+    display: inline-grid;
+    width: 1.75rem;
+    padding: 0 0.3rem 0 0.05rem;
+    border: 0;
+    background: transparent;
+    color: color-mix(in srgb, var(--foreground) 36%, transparent);
+    font-family: system-ui, sans-serif;
+    font-size: 0.86rem;
+    line-height: 1;
+    opacity: 0.48;
+    place-items: center;
+    transition:
+      color 150ms ease,
+      opacity 150ms ease;
+  }
+
+  .search-history__entry:hover,
+  .search-history__entry:focus-within {
+    border-color: color-mix(in srgb, var(--accent) 42%, transparent);
+    background: color-mix(in srgb, var(--accent) 6%, transparent);
+  }
+
+  .search-history__entry:hover .search-history__delete,
+  .search-history__entry:focus-within .search-history__delete {
+    opacity: 1;
+  }
+
+  .search-history__item:hover,
+  .search-history__item:focus-visible {
+    color: var(--accent);
+    outline: none;
+  }
+
+  .search-history__delete:hover,
+  .search-history__delete:focus-visible {
+    color: var(--accent);
+    outline: none;
+  }
+
+  @media (hover: none) {
+    .search-history__delete {
+      opacity: 0.58;
+    }
   }
 </style>

@@ -56,20 +56,6 @@ const { totalEntries } = Astro.props;
     pointer-events: none;
     transform: translateY(-18px);
     transition: opacity 900ms ease;
-    -webkit-mask-image: linear-gradient(
-      to bottom,
-      #000 0%,
-      #000 48%,
-      rgb(0 0 0 / 88%) 62%,
-      transparent 100%
-    );
-    mask-image: linear-gradient(
-      to bottom,
-      #000 0%,
-      #000 48%,
-      rgb(0 0 0 / 88%) 62%,
-      transparent 100%
-    );
   }
 
   .time-river-canvas.is-ready {
@@ -143,9 +129,9 @@ const { totalEntries } = Astro.props;
   const EROSION_STRENGTH = 0.11;
   const FLOW_SPEED = 0.4;
   const TURBULENCE_LIGHT = 2.7;
-  const TURBULENCE_DARK = 4.0;
-  const SPECULAR_INTENSITY = 0.14;
-  const SPECULAR_INTENSITY_LIGHT = 0.14;
+  const TURBULENCE_DARK = 3.2;
+  const SPECULAR_INTENSITY = 0.195;
+  const SPECULAR_INTENSITY_LIGHT = 0.16;
   const RIVER_DEPTH = 64;
   const MAX_TRAILS = 10;
   const TRAIL_LIFETIME = 1800;
@@ -178,12 +164,16 @@ const { totalEntries } = Astro.props;
   const clamp = (value: number, minimum: number, maximum: number) =>
     Math.min(maximum, Math.max(minimum, value));
 
-  const WATER_DEEP_DARK = new Float32Array([0.004, 0.227, 0.25]);
-  const WATER_SHALLOW_DARK = new Float32Array([0.0, 0.96, 0.83]);
+  const WATER_DEEP_DARK = new Float32Array([0.004, 0.184, 0.245]);
+  const WATER_SHALLOW_DARK = new Float32Array([0.0, 0.085, 0.171]);
   const WATER_SPECULAR_DARK = new Float32Array([1.0, 1.0, 1.0]);
-  const WATER_DEEP_LIGHT = new Float32Array([0.54, 0.78, 0.81]);
-  const WATER_SHALLOW_LIGHT = new Float32Array([0.78, 0.92, 0.93]);
+  const WATER_SKY_DARK = new Float32Array([0.569, 1.0, 1.0]);
+  const BACKGROUND_DARK = new Float32Array([0.126, 0.126, 0.141]);
+  const WATER_DEEP_LIGHT = new Float32Array([0.781, 0.958, 0.98]);
+  const WATER_SHALLOW_LIGHT = new Float32Array([0.911, 0.95, 1.0]);
   const WATER_SPECULAR_LIGHT = new Float32Array([1.0, 1.0, 1.0]);
+  const WATER_SKY_LIGHT = new Float32Array([0.82, 0.894, 1.0]);
+  const BACKGROUND_LIGHT = new Float32Array([0.992, 0.992, 0.992]);
 
   const VERTEX_SHADER = `#version 300 es
     precision highp float;
@@ -381,6 +371,8 @@ const { totalEntries } = Astro.props;
     uniform vec3 uColorDeep;
     uniform vec3 uColorShallow;
     uniform vec3 uColorSpecular;
+    uniform vec3 uColorSkyReflection;
+    uniform vec3 uColorBackground;
     uniform vec3 uCameraPosition;
     uniform float uFadeWidth;
     uniform float uErosionStrength;
@@ -449,7 +441,7 @@ const { totalEntries } = Astro.props;
 
       vec3 skyReflection = mix(
         uColorDeep * 1.5,
-        vec3(0.5, 0.85, 1.0),
+        uColorSkyReflection,
         fresnel
       );
       vec3 finalColor = mix(
@@ -473,8 +465,9 @@ const { totalEntries } = Astro.props;
       float upperEdge = 1.0 - smoothstep(highBound, 1.0, vUv.y);
       float edgeFade = pow(lowerEdge * upperEdge, 1.4);
 
-      finalColor *= 0.1 + 0.9 * edgeFade;
-      outColor = vec4(finalColor, 0.95 * edgeFade);
+      vec3 fadedColor = mix(uColorBackground, finalColor, edgeFade);
+      float alpha = 0.95 * edgeFade;
+      outColor = vec4(fadedColor * alpha, alpha);
     }
   `;
 
@@ -694,6 +687,8 @@ const { totalEntries } = Astro.props;
         "uColorDeep",
         "uColorShallow",
         "uColorSpecular",
+        "uColorSkyReflection",
+        "uColorBackground",
         "uCameraPosition",
         "uErosionStrength",
         "uSurfaceSize",
@@ -935,6 +930,14 @@ const { totalEntries } = Astro.props;
       this.gl.uniform3fv(
         this.uniforms.uColorSpecular,
         this.lightTheme ? WATER_SPECULAR_LIGHT : WATER_SPECULAR_DARK
+      );
+      this.gl.uniform3fv(
+        this.uniforms.uColorSkyReflection,
+        this.lightTheme ? WATER_SKY_LIGHT : WATER_SKY_DARK
+      );
+      this.gl.uniform3fv(
+        this.uniforms.uColorBackground,
+        this.lightTheme ? BACKGROUND_LIGHT : BACKGROUND_DARK
       );
       this.gl.uniform3fv(this.uniforms.uCameraPosition, this.cameraPosition);
       this.uploadTrails(now);

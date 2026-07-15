@@ -122,12 +122,14 @@ const DiaryTimeline: React.FC<DiaryTimelineProps> = ({
   const [activePeriod, setActivePeriod] = useState(
     archiveGroups[0]?.months[0]?.value ?? ""
   );
+  const [activeJumpTarget, setActiveJumpTarget] = useState<string | null>(null);
   const [isPeriodMenuOpen, setIsPeriodMenuOpen] = useState(false);
 
   const isLoadingRef = useRef(false);
   const loadingCountRef = useRef(0);
   const categoryStatesRef = useRef<CategoryStates>(initialCategoryStates);
-  const pendingTargetDateRef = useRef<string | null>(null);
+  const targetAlignmentFrameRef = useRef<number | null>(null);
+  const targetAlignmentTimeoutRef = useRef<number | null>(null);
   const pendingCategoryRef = useRef<CategoryFilter>("all");
   const requestRef = useRef<Map<string, Promise<DiaryPageResponse>>>(new Map());
   const loadMoreSentinelRef = useRef<HTMLDivElement>(null);
@@ -303,21 +305,6 @@ const DiaryTimeline: React.FC<DiaryTimelineProps> = ({
     return () => observer.disconnect();
   }, [hasMore, loadMore]);
 
-  const scrollToFeedStart = useCallback(() => {
-    requestAnimationFrame(() => {
-      const feed = document.getElementById("diary-feed");
-      if (!feed) return;
-
-      const reduceMotion = window.matchMedia(
-        "(prefers-reduced-motion: reduce)"
-      ).matches;
-      feed.scrollIntoView({
-        behavior: reduceMotion ? "auto" : "smooth",
-        block: "start",
-      });
-    });
-  }, []);
-
   const commitCategoryTransition = useCallback(
     (category: CategoryFilter, nextCategoryState?: CategoryState) => {
       const commit = () => {
@@ -395,18 +382,103 @@ const DiaryTimeline: React.FC<DiaryTimelineProps> = ({
     []
   );
 
+  const isToolbarPinned = useCallback(() => {
+    const toolbar = document.querySelector<HTMLElement>(".diary-toolbar");
+    if (!toolbar) return false;
+
+    const stickyTop = Number.parseFloat(getComputedStyle(toolbar).top);
+    return toolbar.getBoundingClientRect().top <= stickyTop + 1;
+  }, []);
+
+  const alignFeedStartBelowToolbar = useCallback(() => {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        document.getElementById("diary-feed")?.scrollIntoView({
+          behavior: "instant" as ScrollBehavior,
+          block: "start",
+        });
+      });
+    });
+  }, []);
+
+  const cancelTargetAlignment = useCallback(() => {
+    if (targetAlignmentFrameRef.current !== null) {
+      cancelAnimationFrame(targetAlignmentFrameRef.current);
+      targetAlignmentFrameRef.current = null;
+    }
+    if (targetAlignmentTimeoutRef.current !== null) {
+      window.clearTimeout(targetAlignmentTimeoutRef.current);
+      targetAlignmentTimeoutRef.current = null;
+    }
+  }, []);
+
+  const alignTargetBelowToolbar = useCallback(
+    (targetDate: string) => {
+      cancelTargetAlignment();
+
+      const align = () => {
+        const target = document.getElementById(`entry-${targetDate}`);
+        if (!target) return;
+
+        const documentTop = target.getBoundingClientRect().top + window.scrollY;
+        const scrollMarginTop = Number.parseFloat(
+          getComputedStyle(target).scrollMarginTop
+        );
+        const rootFontSize = Number.parseFloat(
+          getComputedStyle(document.documentElement).fontSize
+        );
+        const targetTop =
+          (Number.isFinite(scrollMarginTop) ? scrollMarginTop : 0) +
+          (Number.isFinite(rootFontSize) ? rootFontSize * 1.5 : 24);
+        window.scrollTo({
+          top: documentTop - targetTop,
+          behavior: "instant" as ScrollBehavior,
+        });
+
+        // A long jump can synchronously change the height of content above the
+        // target (for example when lazy media enters the viewport). Correct it
+        // in the same frame so only the final position is ever painted.
+        const synchronousDrift = target.getBoundingClientRect().top - targetTop;
+        if (Math.abs(synchronousDrift) > 1) {
+          window.scrollTo({
+            top: window.scrollY + synchronousDrift,
+            behavior: "instant" as ScrollBehavior,
+          });
+        }
+      };
+
+      // Let newly mounted media cards finish their first layout before the
+      // only visible scroll, avoiding an overshoot followed by a correction.
+      targetAlignmentTimeoutRef.current = window.setTimeout(() => {
+        targetAlignmentTimeoutRef.current = null;
+        targetAlignmentFrameRef.current = requestAnimationFrame(() => {
+          targetAlignmentFrameRef.current = requestAnimationFrame(() => {
+            targetAlignmentFrameRef.current = null;
+            align();
+          });
+        });
+      }, 320);
+    },
+    [cancelTargetAlignment]
+  );
+
+  useEffect(() => cancelTargetAlignment, [cancelTargetAlignment]);
+
   const applyFilters = useCallback(
     async (category: CategoryFilter) => {
       if (category === activeCategory) return;
+      setActiveJumpTarget(null);
+      const keepToolbarPinned = isToolbarPinned();
       pendingCategoryRef.current = category;
       const categoryState = categoryStatesRef.current[category];
       if (categoryState.initialized) {
         commitCategoryTransition(category);
-        scrollToFeedStart();
+        if (keepToolbarPinned) alignFeedStartBelowToolbar();
         return;
       }
 
       startLoading();
+      let alignAfterLoading = false;
       try {
         const result = await fetchPage(category, 1);
         const nextCategoryState: CategoryState = {
@@ -419,7 +491,7 @@ const DiaryTimeline: React.FC<DiaryTimelineProps> = ({
 
         if (pendingCategoryRef.current === category) {
           commitCategoryTransition(category, nextCategoryState);
-          scrollToFeedStart();
+          alignAfterLoading = keepToolbarPinned;
         } else {
           updateCategoryState(category, () => nextCategoryState);
         }
@@ -428,13 +500,15 @@ const DiaryTimeline: React.FC<DiaryTimelineProps> = ({
       } finally {
         finishLoading();
       }
+      if (alignAfterLoading) alignFeedStartBelowToolbar();
     },
     [
       activeCategory,
+      alignFeedStartBelowToolbar,
       commitCategoryTransition,
       fetchPage,
       finishLoading,
-      scrollToFeedStart,
+      isToolbarPinned,
       startLoading,
       updateCategoryState,
     ]
@@ -442,40 +516,17 @@ const DiaryTimeline: React.FC<DiaryTimelineProps> = ({
 
   const jumpToMonth = useCallback(
     async (month: ArchiveMonth) => {
+      cancelTargetAlignment();
       setActivePeriod(month.value);
+      setActiveJumpTarget(month.targetDate);
       setActiveCategory("all");
       setIsPeriodMenuOpen(false);
-      pendingTargetDateRef.current = month.targetDate;
 
       const loaded = await loadThroughPage("all", month.page);
-      if (!loaded) pendingTargetDateRef.current = null;
-
-      requestAnimationFrame(() => {
-        const target = document.getElementById(`entry-${month.targetDate}`);
-        if (!target) return;
-        target.scrollIntoView({
-          behavior: "instant" as ScrollBehavior,
-          block: "start",
-        });
-      });
+      if (loaded) alignTargetBelowToolbar(month.targetDate);
     },
-    [loadThroughPage]
+    [alignTargetBelowToolbar, cancelTargetAlignment, loadThroughPage]
   );
-
-  useEffect(() => {
-    const targetDate = pendingTargetDateRef.current;
-    if (!targetDate) return;
-    const target = document.getElementById(`entry-${targetDate}`);
-    if (!target) return;
-
-    pendingTargetDateRef.current = null;
-    requestAnimationFrame(() => {
-      target.scrollIntoView({
-        behavior: "instant" as ScrollBehavior,
-        block: "start",
-      });
-    });
-  }, [displayedEntries]);
 
   useEffect(() => {
     const entries = Array.from(
@@ -626,7 +677,7 @@ const DiaryTimeline: React.FC<DiaryTimelineProps> = ({
             aria-labelledby={`date-${entry.date}`}
             aria-describedby={`content-${entry.date}`}
             tabIndex={0}
-            className={`${riverMode ? "time-river-entry" : ""} diary-feed-entry focus:ring-skin-accent focus:ring-offset-skin-fill rounded-lg focus:outline-none`}
+            className={`${riverMode ? "time-river-entry" : ""} ${activeJumpTarget === entry.date ? "is-time-jump-target" : ""} diary-feed-entry focus:ring-skin-accent focus:ring-offset-skin-fill rounded-lg focus:outline-none`}
           >
             <DiaryEntryReact
               date={entry.date}

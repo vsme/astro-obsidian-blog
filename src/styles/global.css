@@ -157,7 +157,13 @@ html[data-theme="dark"] {
 
 #diary-feed {
   padding-bottom: 2rem;
-  scroll-margin-top: 8.5rem;
+  scroll-margin-top: 10rem;
+}
+
+@media (min-width: 640px) {
+  #diary-feed {
+    min-height: calc(100vh - 8.5rem);
+  }
 }
 
 #diary-feed > article {
@@ -595,6 +601,13 @@ html[data-theme="dark"] {
       animation: time-river-entry-reveal linear both;
       animation-timeline: view();
       animation-range: entry 4% cover 22%;
+    }
+
+    .time-river-entry.is-time-jump-target {
+      animation: none;
+      filter: none;
+      opacity: 1;
+      transform: none;
     }
   }
 }

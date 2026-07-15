@@ -567,43 +567,44 @@ const DiaryTimeline: React.FC<DiaryTimelineProps> = ({
               <span className="diary-period-chevron" aria-hidden="true" />
             </button>
 
-            {isPeriodMenuOpen && (
-              <div
-                id="diary-period-menu"
-                className="diary-period-menu"
-                role="dialog"
-                aria-label="选择要跳转的年份和月份"
-              >
-                <div className="diary-period-menu-header">
-                  <strong>时间导航</strong>
-                  <span>最新记录在前</span>
-                </div>
-                <div className="diary-period-menu-content">
-                  {archiveGroups.map(group => (
-                    <div className="diary-period-year" key={group.year}>
-                      <span>{group.year}</span>
-                      <div>
-                        {group.months.map(month => (
-                          <button
-                            key={month.value}
-                            type="button"
-                            className={
-                              activePeriod === month.value ? "is-active" : ""
-                            }
-                            aria-current={
-                              activePeriod === month.value ? "date" : undefined
-                            }
-                            onClick={() => void jumpToMonth(month)}
-                          >
-                            {month.label}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                </div>
+            <div
+              id="diary-period-menu"
+              className="diary-period-menu"
+              role="dialog"
+              aria-label="选择要跳转的年份和月份"
+              aria-hidden={!isPeriodMenuOpen}
+              data-open={isPeriodMenuOpen ? "true" : "false"}
+              inert={!isPeriodMenuOpen ? true : undefined}
+            >
+              <div className="diary-period-menu-header">
+                <strong>时间导航</strong>
+                <span>最新记录在前</span>
               </div>
-            )}
+              <div className="diary-period-menu-content">
+                {archiveGroups.map(group => (
+                  <div className="diary-period-year" key={group.year}>
+                    <span>{group.year}</span>
+                    <div>
+                      {group.months.map(month => (
+                        <button
+                          key={month.value}
+                          type="button"
+                          className={
+                            activePeriod === month.value ? "is-active" : ""
+                          }
+                          aria-current={
+                            activePeriod === month.value ? "date" : undefined
+                          }
+                          onClick={() => void jumpToMonth(month)}
+                        >
+                          {month.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         )}
       </div>

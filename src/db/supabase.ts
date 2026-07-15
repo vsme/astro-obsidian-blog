@@ -36,6 +36,103 @@ export type ReactionRow = {
 const isBrowser =
   typeof window !== "undefined" && typeof document !== "undefined";
 
+const REACTIONS_CACHE_TTL_MS = 5 * 60 * 1000;
+const REACTIONS_CACHE_PREFIX = "astro-paper:reactions:v1";
+
+interface ReactionCacheEntry {
+  expiresAt: number;
+  rows: ReactionRow[];
+}
+
+const reactionsMemoryCache = new Map<string, ReactionCacheEntry>();
+
+function getReactionCacheKey(contentId: string, userHash?: string) {
+  return `${userHash ?? "anonymous"}:${contentId}`;
+}
+
+function getReactionStorageKey(contentId: string, userHash?: string) {
+  return `${REACTIONS_CACHE_PREFIX}:${encodeURIComponent(
+    getReactionCacheKey(contentId, userHash)
+  )}`;
+}
+
+export function getCachedContentReactions(
+  contentId: string,
+  userHash?: string
+): ReactionRow[] | null {
+  if (!isBrowser) return null;
+
+  const cacheKey = getReactionCacheKey(contentId, userHash);
+  const now = Date.now();
+  const memoryEntry = reactionsMemoryCache.get(cacheKey);
+  if (memoryEntry && memoryEntry.expiresAt > now) {
+    return memoryEntry.rows;
+  }
+  reactionsMemoryCache.delete(cacheKey);
+
+  try {
+    const storageKey = getReactionStorageKey(contentId, userHash);
+    const stored = localStorage.getItem(storageKey);
+    if (!stored) return null;
+
+    const entry = JSON.parse(stored) as ReactionCacheEntry;
+    if (!Array.isArray(entry.rows) || entry.expiresAt <= now) {
+      localStorage.removeItem(storageKey);
+      return null;
+    }
+
+    reactionsMemoryCache.set(cacheKey, entry);
+    return entry.rows;
+  } catch {
+    return null;
+  }
+}
+
+function setCachedContentReactions(
+  contentId: string,
+  userHash: string | undefined,
+  rows: ReactionRow[]
+) {
+  if (!isBrowser) return;
+
+  const entry: ReactionCacheEntry = {
+    expiresAt: Date.now() + REACTIONS_CACHE_TTL_MS,
+    rows: rows.map(row => ({ ...row, content_id: contentId })),
+  };
+  reactionsMemoryCache.set(getReactionCacheKey(contentId, userHash), entry);
+
+  try {
+    localStorage.setItem(
+      getReactionStorageKey(contentId, userHash),
+      JSON.stringify(entry)
+    );
+  } catch {
+    // localStorage 不可用或空间不足时，继续使用内存缓存。
+  }
+}
+
+function updateCachedContentReaction(
+  contentId: string,
+  userHash: string,
+  result: { emoji: string; new_count: number; is_active: boolean }
+) {
+  const existing = getCachedContentReactions(contentId, userHash) ?? [];
+  const hasEmoji = existing.some(row => row.emoji === result.emoji);
+  const nextRow: ReactionRow = {
+    content_id: contentId,
+    emoji: result.emoji,
+    count: result.new_count,
+    is_active: result.is_active,
+  };
+  setCachedContentReactions(
+    contentId,
+    userHash,
+    hasEmoji
+      ? existing.map(row => (row.emoji === result.emoji ? nextRow : row))
+      : [...existing, nextRow]
+  );
+}
+
 // 检查 Supabase 是否可用的辅助函数
 function checkSupabaseAvailable(): boolean {
   if (!supabase) {
@@ -70,6 +167,9 @@ export async function getContentReactionsDirect(
   contentId: string,
   userHash?: string
 ) {
+  const cached = getCachedContentReactions(contentId, userHash);
+  if (cached) return cached;
+
   if (!checkSupabaseAvailable()) {
     return [] as ReactionRow[];
   }
@@ -82,7 +182,9 @@ export async function getContentReactionsDirect(
     console.error("Error fetching reactions:", error);
     return [] as ReactionRow[];
   }
-  return (data as ReactionRow[]) ?? [];
+  const rows = (data as ReactionRow[]) ?? [];
+  setCachedContentReactions(contentId, userHash, rows);
+  return rows;
 }
 
 /**
@@ -130,6 +232,9 @@ class ReactionsBatcher {
       // SSR：直接单条 RPC，避免跨请求共享状态
       return getContentReactionsDirect(contentId, userHash);
     }
+
+    const cached = getCachedContentReactions(contentId, userHash);
+    if (cached) return Promise.resolve(cached);
 
     const key = userHash ?? "";
     if (!this.queues.has(key)) this.queues.set(key, new Map());
@@ -187,6 +292,7 @@ class ReactionsBatcher {
 
           for (const id of ids) {
             const list = grouped.get(id) ?? [];
+            setCachedContentReactions(id, userKey || undefined, list);
             (q.get(id) ?? []).forEach(({ resolve }) => resolve(list));
           }
         } catch (err) {
@@ -234,10 +340,14 @@ export async function toggleEmojiReaction(
   }
 
   // 返回单行：{ emoji, new_count, is_active }
-  return (
-    (data?.[0] as { emoji: string; new_count: number; is_active: boolean }) ??
-    null
-  );
+  const result =
+    (data?.[0] as {
+      emoji: string;
+      new_count: number;
+      is_active: boolean;
+    }) ?? null;
+  if (result) updateCachedContentReaction(contentId, userHash, result);
+  return result;
 }
 
 // 生成用户哈希（基于强随机 + localStorage 持久化）

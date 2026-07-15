@@ -1,8 +1,10 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useLayoutEffect } from "react";
 import {
+  getCachedContentReactions,
   getContentReactions,
   toggleEmojiReaction,
   generateUserHash,
+  type ReactionRow,
 } from "../db/supabase";
 
 // Loading 图标组件
@@ -40,6 +42,20 @@ interface EmojiReaction {
   count: number;
   isActive: boolean;
   defaultShow?: boolean;
+}
+
+function mergeReactionRows(
+  reactions: EmojiReaction[],
+  rows: ReactionRow[]
+) {
+  return reactions.map(reaction => {
+    const cachedReaction = rows.find(row => row.emoji === reaction.emoji);
+    return {
+      ...reaction,
+      count: cachedReaction?.count ?? 0,
+      isActive: cachedReaction?.is_active ?? false,
+    };
+  });
 }
 
 // 表情按钮组件
@@ -108,39 +124,34 @@ const EmojiReactions: React.FC<{ id: string }> = ({ id }) => {
     { emoji: "👀", label: "围观", count: 0, isActive: false },
   ]);
 
-  // 初始化用户哈希（仅在客户端）
-  useEffect(() => {
-    setUserHash(generateUserHash());
-  }, []);
+  // 水合后、首次绘制前优先恢复短时缓存；未命中时再请求 Supabase。
+  useLayoutEffect(() => {
+    const currentUserHash = generateUserHash();
+    setUserHash(currentUserHash);
 
-  // 加载表情数据
-  useEffect(() => {
-    if (!userHash) return; // 等待 userHash 初始化完成
+    const cached = getCachedContentReactions(id, currentUserHash);
+    if (cached) {
+      setEmojiReactions(previous => mergeReactionRows(previous, cached));
+      return;
+    }
 
-    const loadReactions = async () => {
-      try {
-        const reactions = await getContentReactions(id, userHash);
-
-        setEmojiReactions(prev =>
-          prev.map(reaction => {
-            const dbReaction = reactions.find(
-              (r: { emoji: string; count: number; is_active: boolean }) =>
-                r.emoji === reaction.emoji
-            );
-            return {
-              ...reaction,
-              count: dbReaction?.count || 0,
-              isActive: dbReaction?.is_active || false,
-            };
-          })
-        );
-      } catch (error) {
+    let cancelled = false;
+    void getContentReactions(id, currentUserHash)
+      .then(reactions => {
+        if (!cancelled) {
+          setEmojiReactions(previous =>
+            mergeReactionRows(previous, reactions)
+          );
+        }
+      })
+      .catch(error => {
         console.error("Failed to load reactions:", error);
-      }
-    };
+      });
 
-    loadReactions();
-  }, [id, userHash]);
+    return () => {
+      cancelled = true;
+    };
+  }, [id]);
 
   // 监听点击外部区域事件
   useEffect(() => {

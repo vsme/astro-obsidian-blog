@@ -272,13 +272,6 @@ html[data-theme="dark"] {
   pointer-events: none;
 }
 
-.diary-category-interacted .time-river-entry {
-  animation: none;
-  filter: none;
-  opacity: 1;
-  transform: none;
-}
-
 @keyframes diary-filter-spin {
   to {
     transform: rotate(1turn);
@@ -463,14 +456,14 @@ html[data-theme="dark"] {
 
 .time-river-date-group {
   position: relative;
-  margin-bottom: 5rem;
+  margin-bottom: 4.5rem;
   padding-left: 2rem;
 }
 
 .time-river-date-group::before {
   position: absolute;
   top: 1.25rem;
-  bottom: -5rem;
+  bottom: -4.5rem;
   left: var(--river-track-x);
   width: 1px;
   background: linear-gradient(

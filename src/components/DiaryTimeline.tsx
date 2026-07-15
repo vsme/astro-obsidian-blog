@@ -122,7 +122,6 @@ const DiaryTimeline: React.FC<DiaryTimelineProps> = ({
   );
   const [isLoading, setIsLoading] = useState(false);
   const [isViewTransitioning, setIsViewTransitioning] = useState(false);
-  const [hasCategoryInteracted, setHasCategoryInteracted] = useState(false);
   const [activeCategory, setActiveCategory] = useState<CategoryFilter>("all");
   const [activePeriod, setActivePeriod] = useState(
     archiveGroups[0]?.months[0]?.value ?? ""
@@ -323,7 +322,6 @@ const DiaryTimeline: React.FC<DiaryTimelineProps> = ({
           return next;
         });
       }
-      setHasCategoryInteracted(true);
       setActiveCategory(category);
     },
     []
@@ -494,7 +492,6 @@ const DiaryTimeline: React.FC<DiaryTimelineProps> = ({
         return;
       }
 
-      setHasCategoryInteracted(true);
       setActivePeriod(month.value);
       setActiveJumpTarget(month.targetDate);
       setActiveCategory("all");
@@ -656,7 +653,7 @@ const DiaryTimeline: React.FC<DiaryTimelineProps> = ({
 
       <div
         id="diary-feed"
-        className={`${hasCategoryInteracted ? "diary-category-interacted" : ""} ${isViewTransitioning ? "diary-view-transitioning" : ""}`}
+        className={isViewTransitioning ? "diary-view-transitioning" : ""}
         role="feed"
         aria-label="按时间倒序排列的日记时间线"
         aria-describedby="diary-description"

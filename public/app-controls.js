@@ -106,6 +106,8 @@
       .querySelector("meta[name='theme-color']")
       ?.getAttribute("content");
 
+    event.newDocument.documentElement.setAttribute("data-theme", themeValue);
+
     event.newDocument
       .querySelector("meta[name='theme-color']")
       ?.setAttribute("content", bgColor);

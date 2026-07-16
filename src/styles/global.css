@@ -450,49 +450,8 @@ html[data-theme="dark"] {
   }
 }
 
-.time-river-entry {
-  --river-track-x: 0.45rem;
-}
-
 .time-river-date-group {
-  position: relative;
   margin-bottom: 4.5rem;
-  padding-left: 2rem;
-}
-
-.time-river-date-group::before {
-  position: absolute;
-  top: 1.25rem;
-  bottom: -4.5rem;
-  left: var(--river-track-x);
-  width: 1px;
-  background: linear-gradient(
-    180deg,
-    color-mix(in srgb, var(--accent) 58%, transparent),
-    color-mix(in srgb, var(--border) 36%, transparent) 24%,
-    color-mix(in srgb, var(--border) 15%, transparent)
-  );
-  content: "";
-}
-
-.time-river-date-group::after {
-  position: absolute;
-  top: 0.75rem;
-  left: var(--river-track-x);
-  width: 0.55rem;
-  height: 0.55rem;
-  border: 1px solid color-mix(in srgb, var(--accent) 80%, transparent);
-  border-radius: 50%;
-  background: var(--background);
-  box-shadow:
-    0 0 0 0.3rem color-mix(in srgb, var(--accent) 8%, transparent),
-    0 0 1.35rem color-mix(in srgb, var(--accent) 22%, transparent);
-  content: "";
-  transform: translateX(-50%);
-  transition:
-    background-color 350ms ease,
-    box-shadow 350ms ease,
-    transform 350ms ease;
 }
 
 .time-river-date-header {
@@ -503,22 +462,11 @@ html[data-theme="dark"] {
 }
 
 .time-river-date-lockup {
-  position: relative;
-  display: grid;
-  gap: 0.46rem;
-  justify-items: start;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: baseline;
   width: 100%;
-}
-
-.time-river-date-year {
-  position: absolute;
-  top: -0.75rem;
-  left: 0.08rem;
-  color: color-mix(in srgb, var(--foreground) 46%, transparent);
-  font-family: ui-sans-serif, system-ui, sans-serif;
-  font-size: 0.65rem;
-  line-height: 1;
-  letter-spacing: 0.12em;
 }
 
 .time-river-date-lockup h2 {
@@ -530,8 +478,7 @@ html[data-theme="dark"] {
 .time-river-date-secondary {
   display: flex;
   gap: 0.42rem;
-  align-items: center;
-  padding-left: 0.08rem;
+  align-items: baseline;
   white-space: nowrap;
 }
 
@@ -559,50 +506,12 @@ html[data-theme="dark"] {
   letter-spacing: 0.04em;
 }
 
-.time-river-date-times::before {
-  color: color-mix(in srgb, var(--accent) 58%, transparent);
-  content: "·";
-}
-
 .time-river-date-times > span {
   color: color-mix(in srgb, var(--accent) 42%, transparent);
 }
 
 .time-river-timeline-row {
   display: block;
-}
-
-.time-river-entry:hover .time-river-date-group::after,
-.time-river-entry:focus-within .time-river-date-group::after {
-  background: var(--accent);
-  box-shadow:
-    0 0 0 0.42rem color-mix(in srgb, var(--accent) 10%, transparent),
-    0 0 1.7rem color-mix(in srgb, var(--accent) 38%, transparent);
-  transform: translateX(-50%) scale(1.08);
-}
-
-@media (min-width: 640px) {
-  .time-river-entry {
-    --river-track-x: 8.4rem;
-  }
-
-  .time-river-date-group {
-    display: grid;
-    grid-template-columns: 7.6rem minmax(0, 1fr);
-    column-gap: 2.4rem;
-    padding-left: 0;
-  }
-
-  .time-river-date-header {
-    position: sticky;
-    top: 8.5rem;
-    align-self: start;
-    margin-bottom: 0;
-  }
-
-  .time-river-date-group > [role="group"] {
-    grid-column: 2;
-  }
 }
 
 @keyframes time-river-entry-reveal {

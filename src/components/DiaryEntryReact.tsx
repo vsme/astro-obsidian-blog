@@ -19,7 +19,6 @@ export interface TimeBlock {
 
 export interface DiaryEntryProps {
   date: string;
-  hideYear?: boolean;
   timeBlocks: TimeBlock[];
 }
 
@@ -43,10 +42,9 @@ function ymdToUTC(ymd: string) {
 
 const DiaryEntryReact: React.FC<DiaryEntryProps> = ({
   date,
-  hideYear = false,
   timeBlocks,
 }) => {
-  // 1) 先准备稳定的 SSR 文案：绝对日期 (MM/DD) + 固定时区的星期/年份
+  // 1) 先准备稳定的 SSR 文案：绝对日期 (MM/DD) + 固定时区的星期
   const entryDateUTC = ymdToUTC(date);
 
   const absoluteLabel = new Intl.DateTimeFormat("zh-CN", {
@@ -59,11 +57,6 @@ const DiaryEntryReact: React.FC<DiaryEntryProps> = ({
     timeZone: TZ,
     weekday: "short",
   }).format(entryDateUTC); // 如 "周日"
-
-  const yearLabel = new Intl.DateTimeFormat("zh-CN", {
-    timeZone: TZ,
-    year: "numeric",
-  }).format(entryDateUTC); // 如 "2025"
 
   // 2) 客户端再计算"今天/昨天/前天"，并替换显示
   const [relativeLabel, setRelativeLabel] = React.useState<string | null>(null);
@@ -92,15 +85,10 @@ const DiaryEntryReact: React.FC<DiaryEntryProps> = ({
     <div className="time-river-date-group" data-pagefind-weight="2">
       <header className="time-river-date-header">
         <div className="time-river-date-lockup">
-          {!hideYear && (
-            <div className="time-river-date-year" aria-hidden="true">
-              {yearLabel}
-            </div>
-          )}
           <h2
             id={`date-${date}`}
             className="text-skin-accent m-0 text-3xl leading-none font-bold"
-            aria-label={`${relativeLabel ?? absoluteLabel} ${weekdayLabel} ${!hideYear ? yearLabel : ""} 的日记`}
+            aria-label={`${date} ${weekdayLabel} 的日记`}
           >
             {/* SSR 时渲染 absoluteLabel；CSR 完成后若有相对文案则替换。
                suppressHydrationWarning 防止首帧文本差异触发水合警告 */}

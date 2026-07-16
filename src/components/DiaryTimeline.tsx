@@ -36,7 +36,6 @@ export interface DiaryTimelineProps {
   initialEntries: ParsedEntry[];
   paginationInfo: PaginationInfo;
   archiveGroups?: ArchiveGroup[];
-  hideYear?: boolean;
   localFiltering?: boolean;
 }
 
@@ -87,7 +86,6 @@ const DiaryTimeline: React.FC<DiaryTimelineProps> = ({
     itemsPerPage: 5,
   },
   archiveGroups = [],
-  hideYear = false,
   localFiltering = false,
 }) => {
   const createCategoryState = (
@@ -673,7 +671,6 @@ const DiaryTimeline: React.FC<DiaryTimelineProps> = ({
           >
             <DiaryEntryReact
               date={entry.date}
-              hideYear={hideYear}
               timeBlocks={entry.timeBlocks}
             />
           </article>

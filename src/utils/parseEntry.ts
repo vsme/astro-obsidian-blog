@@ -117,9 +117,9 @@ export async function parseEntry(entry: CollectionEntry<"diary">) {
           const content = line.substring(2).trim(); // 移除 "> " 前缀
           return content || "&nbsp;"; // 如果内容为空，使用不间断空格
         })
-        .map(line => `<p class="mb-1 last:mb-0">${line}</p>`)
+        .map(line => `<p class="mb-1.5 leading-relaxed last:mb-0">${line}</p>`)
         .join("");
-      return `<blockquote class="px-3 py-2 my-2 italic text-foreground/80 relative"><span class="text-4xl text-foreground/30 absolute -left-1 -top-1">“</span>${lines}<span class="text-4xl text-foreground/30 absolute -right-0 -bottom-2">”</span></blockquote>`;
+      return `<blockquote class="relative my-4 border-l-2 border-accent/20 py-1.5 pr-3 pl-5 text-foreground/85 not-italic"><span aria-hidden="true" class="absolute top-1.5 left-2 text-xl leading-none text-accent/30">“</span>${lines}</blockquote>`;
     });
 
     // 提取图片并优化

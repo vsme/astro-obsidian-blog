@@ -126,7 +126,7 @@ const TimelineItemReact: React.FC<TimelineItemProps> = ({
           {/* 时间标签 - 使用h3标题以便Pagefind识别为子结果 */}
           <h3
             id={date ? `diary-${date}-${time.replace(/:/g, "-")}` : undefined}
-            className="text-skin-base/60 m-0 mb-3 flex items-center gap-2 font-mono text-sm font-semibold tabular-nums"
+            className="text-skin-base/60 m-0 mb-3 flex items-center gap-2 font-mono text-sm font-medium tabular-nums"
             aria-label={`${time} 时间段的记录`}
           >
             {date && (

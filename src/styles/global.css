@@ -134,7 +134,7 @@ html[data-theme="dark"] {
   align-items: center;
   justify-content: space-between;
   margin-top: -4rem;
-  margin-bottom: 4rem;
+  margin-bottom: 3rem;
   padding-block: 0.45rem;
   background: color-mix(in srgb, var(--background) 92%, transparent);
   backdrop-filter: blur(1rem) saturate(140%);
@@ -491,23 +491,6 @@ html[data-theme="dark"] {
   font-size: 0.69rem;
   line-height: 1;
   letter-spacing: 0.04em;
-}
-
-.time-river-date-times {
-  display: flex;
-  gap: 0.38rem;
-  align-items: center;
-  color: color-mix(in srgb, var(--foreground) 58%, transparent);
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 0.68rem;
-  font-variant-numeric: tabular-nums;
-  font-weight: 500;
-  line-height: 1;
-  letter-spacing: 0.04em;
-}
-
-.time-river-date-times > span {
-  color: color-mix(in srgb, var(--accent) 42%, transparent);
 }
 
 .time-river-timeline-row {

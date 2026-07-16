@@ -150,14 +150,27 @@ const MediaCard: React.FC<MediaCardProps> = ({
                   </>
                 ) : (
                   <>
-                    {release_date && (
+                    {cardType === "book" ? (
                       <>
-                        <span>{formatReleaseDate(release_date, cardType)}</span>
-                        <span>
-                          {(cardType === "book" ? author : region) &&
-                            ` (${cardType === "book" ? author : region})`}
-                        </span>
+                        {author && <span>{author}</span>}
+                        {author && release_date && (
+                          <span aria-hidden="true">·</span>
+                        )}
+                        {release_date && (
+                          <time dateTime={release_date}>
+                            {formatReleaseDate(release_date, cardType)}
+                          </time>
+                        )}
                       </>
+                    ) : (
+                      release_date && (
+                        <>
+                          <time dateTime={release_date}>
+                            {formatReleaseDate(release_date, cardType)}
+                          </time>
+                          {region && <span>{`(${region})`}</span>}
+                        </>
+                      )
                     )}
                     {runtime && <span>{`• ${formatRuntime(runtime)}`}</span>}
                   </>
@@ -232,7 +245,7 @@ const MediaCard: React.FC<MediaCardProps> = ({
               genres.split(/[,，]/).map((genre, index) => (
                 <span
                   key={index}
-                  className="rounded-full border border-accent/20 bg-accent/10 px-2.5 py-1 text-xs font-medium text-accent"
+                  className="rounded-full border border-accent/15 bg-accent/5 px-2 py-0.5 text-xs font-normal text-accent/70"
                 >
                   {genre.trim()}
                 </span>

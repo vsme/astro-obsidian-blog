@@ -14,6 +14,12 @@ const diaryEntries = await getCollection("diary");
 // 过滤掉草稿状态的条目
 const publishedEntries = diaryEntries.filter(entry => !entry.data.draft);
 
+// 每个二级时间标题代表一条独立记录；页面分页仍按日期文件进行
+const totalRecords = publishedEntries.reduce((count, entry) => {
+  const timeBlocks = entry.body?.match(/^## \d{2}:\d{2}(?:\s|$)/gm);
+  return count + (timeBlocks?.length ?? 0);
+}, 0);
+
 // 按文件名（日期）排序，最新的在前
 // 同时确保同一天内的时间块也按时间倒序排列
 const sortedEntries = publishedEntries.sort((a, b) => {
@@ -78,7 +84,7 @@ const archiveGroups = Array.from(
       跳转到主要内容
     </a>
 
-    <TimeRiverHero totalEntries={sortedEntries.length} />
+    <TimeRiverHero {totalRecords} />
 
     <div class="time-river-diary-shell">
       <section
@@ -99,8 +105,8 @@ const archiveGroups = Array.from(
           <!-- 主要内容区域 -->
           <div class="py-8">
             <div id="diary-description" class="sr-only">
-              日记条目按时间倒序排列，每页显示 {ITEMS_PER_PAGE} 条记录，当前共有
-              {sortedEntries.length} 条记录
+              日记条目按时间倒序排列，每页显示 {ITEMS_PER_PAGE}
+              天的内容，当前共有 {totalRecords} 条记录
             </div>
             <div id="diary-content">
               <DiaryTimeline

@@ -391,13 +391,6 @@ export async function parseEntry(entry: CollectionEntry<"diary">) {
     }
   }
 
-  // 按时间倒序排列时间块（最新的时间在前）
-  timeBlocks.sort((a, b) => {
-    const timeA = a.time.replace(":", "");
-    const timeB = b.time.replace(":", "");
-    return timeB.localeCompare(timeA);
-  });
-
   return {
     date,
     timeBlocks,

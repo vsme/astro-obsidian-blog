@@ -1,9 +1,9 @@
 ---
 interface Props {
-  totalEntries: number;
+  totalRecords: number;
 }
 
-const { totalEntries } = Astro.props;
+const { totalRecords } = Astro.props;
 ---
 
 <time-river-hero>
@@ -15,7 +15,7 @@ const { totalEntries } = Astro.props;
         <p class="time-river-eyebrow">
           <span>时间档案</span>
           <span aria-hidden="true">/</span>
-          <span>{String(totalEntries).padStart(2, "0")} 条记录</span>
+          <span>{String(totalRecords).padStart(2, "0")} 条记录</span>
         </p>
         <h1 id="time-river-title" class="sr-only">时间档案</h1>
         <p class="time-river-description">在日常里，留下那些值得回望的片段。</p>
@@ -108,6 +108,10 @@ const { totalEntries } = Astro.props;
 
     .time-river-hero {
       min-height: 10rem;
+    }
+
+    .time-river-inner {
+      padding: 0;
     }
 
     .time-river-copy {

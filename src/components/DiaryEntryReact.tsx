@@ -40,10 +40,7 @@ function ymdToUTC(ymd: string) {
   return new Date(Date.UTC(y, m - 1, d));
 }
 
-const DiaryEntryReact: React.FC<DiaryEntryProps> = ({
-  date,
-  timeBlocks,
-}) => {
+const DiaryEntryReact: React.FC<DiaryEntryProps> = ({ date, timeBlocks }) => {
   // 1) 先准备稳定的 SSR 文案：绝对日期 (MM/DD) + 固定时区的星期
   const entryDateUTC = ymdToUTC(date);
 
@@ -99,14 +96,6 @@ const DiaryEntryReact: React.FC<DiaryEntryProps> = ({
           <div className="time-river-date-secondary" aria-hidden="true">
             <div className="time-river-date-meta">
               <span>{weekdayLabel}</span>
-            </div>
-            <div className="time-river-date-times">
-              {timeBlocks.map((block, index) => (
-                <React.Fragment key={`${block.time}-${index}`}>
-                  {index > 0 && <span>·</span>}
-                  <time dateTime={`${date}T${block.time}`}>{block.time}</time>
-                </React.Fragment>
-              ))}
             </div>
           </div>
         </div>

@@ -115,7 +115,7 @@ const TimelineItemReact: React.FC<TimelineItemProps> = ({
   }, [isImagesLoaded, optimizedImages]);
   return (
     <article
-      className="mb-6 border-b border-dashed border-border/30 pb-6 last:border-b-0 last:pb-0"
+      className="mb-5 pb-6 last:pb-0"
       tabIndex={0}
       role="article"
       aria-label={`${time} 时间段的记录`}
@@ -126,11 +126,14 @@ const TimelineItemReact: React.FC<TimelineItemProps> = ({
           {/* 时间标签 - 使用h3标题以便Pagefind识别为子结果 */}
           <h3
             id={date ? `diary-${date}-${time.replace(/:/g, "-")}` : undefined}
-            className="sr-only"
+            className="text-skin-base/60 m-0 mb-3 flex items-center gap-2 font-mono text-sm font-semibold tabular-nums"
             aria-label={`${time} 时间段的记录`}
           >
-            <span className="sr-only">{date}</span>
+            {date && (
+              <span className="sr-only">{date.replaceAll("-", "/")} </span>
+            )}
             <time dateTime={date ? `${date}T${time}` : time}>{time}</time>
+            <span className="h-px flex-1 bg-border/35" aria-hidden="true" />
           </h3>
           {/* 内容区域 */}
           <div className="min-w-0 flex-1">
@@ -151,17 +154,16 @@ const TimelineItemReact: React.FC<TimelineItemProps> = ({
                   aria-label={`图片集合，共 ${optimizedImages.length} 张图片`}
                 >
                   <div
-                    className={`grid gap-3 ${
-                      htmlContent
-                        ? "w-full grid-cols-1"
-                        : optimizedImages.length === 1
-                          ? "max-w-80 grid-cols-1"
-                          : optimizedImages.length === 2
+                    className={`grid gap-3 ${htmlContent
+                      ? "w-full grid-cols-1"
+                      : optimizedImages.length === 1
+                        ? "max-w-80 grid-cols-1"
+                        : optimizedImages.length === 2
+                          ? "max-w-83 grid-cols-2"
+                          : optimizedImages.length === 4
                             ? "max-w-83 grid-cols-2"
-                            : optimizedImages.length === 4
-                              ? "max-w-83 grid-cols-2"
-                              : "max-w-126 grid-cols-3"
-                    }`}
+                            : "max-w-126 grid-cols-3"
+                      }`}
                   >
                     {optimizedImages.map((optimizedImg, index) => {
                       const originalImg = images![index];
@@ -169,18 +171,17 @@ const TimelineItemReact: React.FC<TimelineItemProps> = ({
                       return (
                         <a
                           key={index}
-                          className={`lg-item group focus:ring-skin-accent block overflow-hidden rounded-xl focus:outline-none ${
-                            optimizedImages.length === 1
-                              ? "relative"
-                              : "image-item relative aspect-square"
-                          }`}
+                          className={`lg-item group focus:ring-skin-accent block overflow-hidden rounded-xl focus:outline-none ${optimizedImages.length === 1
+                            ? "relative"
+                            : "image-item relative aspect-square"
+                            }`}
                           style={
                             optimizedImages.length === 1
                               ? {}
                               : ({
-                                  aspectRatio: "1 / 1",
-                                  WebkitAspectRatio: "1 / 1",
-                                } as React.CSSProperties)
+                                aspectRatio: "1 / 1",
+                                WebkitAspectRatio: "1 / 1",
+                              } as React.CSSProperties)
                           }
                           data-src={optimizedImg.original}
                           data-lg-size={`${optimizedImg.width}-${optimizedImg.height}`}
@@ -204,10 +205,10 @@ const TimelineItemReact: React.FC<TimelineItemProps> = ({
                               optimizedImages.length === 1
                                 ? {}
                                 : {
-                                    width: "100%",
-                                    height: "100%",
-                                    objectFit: "cover",
-                                  }
+                                  width: "100%",
+                                  height: "100%",
+                                  objectFit: "cover",
+                                }
                             }
                             loading="lazy"
                             title={originalImg.title}

@@ -1,4 +1,4 @@
-import { defineCollection, z } from "astro:content";
+import { defineCollection, reference, z } from "astro:content";
 import { glob } from "astro/loaders";
 import { SITE, BLOG_PATH, DIARY_PATH, FOOTPRINTS_PATH } from "@/config";
 
@@ -49,6 +49,7 @@ const footprints = defineCollection({
         lng: z.number(),
       }),
       draft: z.boolean().optional(),
+      relatedPosts: z.array(reference("blog")).default([]),
       photos: z
         .array(
           z.object({

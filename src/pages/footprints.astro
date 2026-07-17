@@ -193,6 +193,11 @@ const mapData = JSON.stringify(locations).replace(/</g, "\\u003c");
     region: string;
     note: string;
     photos: FootprintPhoto[];
+    relatedPosts: Array<{
+      id: string;
+      title: string;
+      href: string;
+    }>;
   };
 
   const initializeFootprints = async () => {
@@ -511,6 +516,32 @@ const mapData = JSON.stringify(locations).replace(/</g, "\\u003c");
       return icon;
     };
 
+    const createRelatedIcon = (
+      kind: "article" | "arrow" | "chevron"
+    ) => {
+      const icon = document.createElementNS(
+        "http://www.w3.org/2000/svg",
+        "svg"
+      );
+      icon.setAttribute("viewBox", "0 0 24 24");
+      icon.setAttribute("aria-hidden", "true");
+
+      const path = document.createElementNS(
+        "http://www.w3.org/2000/svg",
+        "path"
+      );
+      path.setAttribute(
+        "d",
+        kind === "article"
+          ? "M6 3h8l4 4v14H6z M14 3v5h4 M9 13h6 M9 17h5"
+          : kind === "arrow"
+            ? "M7 17 17 7 M8 7h9v9"
+            : "M8 10l4 4 4-4"
+      );
+      icon.append(path);
+      return icon;
+    };
+
     const escapeHTML = (value: string) =>
       value.replace(
         /[&<>"']/g,
@@ -583,7 +614,50 @@ const mapData = JSON.stringify(locations).replace(/</g, "\\u003c");
         photoGrid.append(link);
       });
 
-      entry.append(entryHeading, photoGrid);
+      entry.append(entryHeading);
+      if (record.relatedPosts.length > 0) {
+        const related = document.createElement("nav");
+        related.className = "footprint-related-posts";
+        related.setAttribute("aria-label", `${record.place}的相关文章`);
+
+        const list = document.createElement("ul");
+        record.relatedPosts.forEach(post => {
+          const item = document.createElement("li");
+          const link = document.createElement("a");
+          link.href = post.href;
+          const title = document.createElement("span");
+          title.textContent = post.title;
+          link.append(
+            createRelatedIcon("article"),
+            title,
+            createRelatedIcon("arrow")
+          );
+          item.append(link);
+          list.append(item);
+        });
+
+        if (record.relatedPosts.length === 1) {
+          related.classList.add("is-single");
+          related.append(list);
+        } else {
+          const disclosure = document.createElement("details");
+          disclosure.className = "footprint-related-disclosure";
+
+          const summary = document.createElement("summary");
+          const count = document.createElement("span");
+          count.textContent = `${record.relatedPosts.length} 篇关联文章`;
+          summary.append(
+            createRelatedIcon("article"),
+            count,
+            createRelatedIcon("chevron")
+          );
+
+          disclosure.append(summary, list);
+          related.append(disclosure);
+        }
+        entry.append(related);
+      }
+      entry.append(photoGrid);
       if (record.photos.length > 6) {
         const photos = Array.from(
           photoGrid.querySelectorAll<HTMLAnchorElement>(".footprint-photo")
@@ -698,8 +772,9 @@ const mapData = JSON.stringify(locations).replace(/</g, "\\u003c");
         empty.hidden = gallery.childElementCount > 0;
         loadMoreButton.hidden = loadedCount >= activeIds.length;
         await refreshGallery();
-      } catch {
+      } catch (error) {
         if (version !== selectionVersion) return;
+        console.error("Failed to render footprint records", error);
         empty.textContent = "记录加载失败，请稍后再试。";
         empty.hidden = false;
       } finally {
@@ -1146,6 +1221,8 @@ const mapData = JSON.stringify(locations).replace(/</g, "\\u003c");
   }
 
   .footprint-results-panel {
+    --journal-gutter: 1rem;
+
     position: absolute;
     z-index: 1100;
     top: 0.75rem;
@@ -1156,14 +1233,16 @@ const mapData = JSON.stringify(locations).replace(/</g, "\\u003c");
     min-width: 0;
     flex-direction: column;
     overflow: hidden;
-    border: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
-    border-radius: 1rem;
+    border: 1px solid color-mix(in srgb, var(--border) 62%, transparent);
+    border-radius: 1.1rem;
     background: color-mix(
       in srgb,
-      var(--background) 96%,
-      var(--foreground) 4%
+      var(--background) 97.5%,
+      var(--foreground) 2.5%
     );
-    box-shadow: 0 1rem 2.5rem rgb(0 0 0 / 18%);
+    box-shadow:
+      inset 0 1px rgb(255 255 255 / 3%),
+      0 1.25rem 3rem rgb(0 0 0 / 20%);
     opacity: 0;
     pointer-events: none;
     transform: translateX(calc(100% + 1.5rem));
@@ -1189,8 +1268,9 @@ const mapData = JSON.stringify(locations).replace(/</g, "\\u003c");
     justify-content: space-between;
     flex: 0 0 auto;
     gap: 0.65rem;
-    padding: 0.75rem 0.8rem 0.7rem;
-    border-bottom: 1px solid color-mix(in srgb, var(--border) 68%, transparent);
+    padding: 0.82rem var(--journal-gutter) 0.76rem;
+    border-bottom: 1px solid
+      color-mix(in srgb, var(--foreground) 9%, transparent);
   }
 
   .footprint-results-header h2 {
@@ -1199,8 +1279,9 @@ const mapData = JSON.stringify(locations).replace(/</g, "\\u003c");
     gap: 0.45rem;
     margin: 0;
     min-width: 0;
-    font-size: 0.88rem;
-    font-weight: 600;
+    font-size: 0.84rem;
+    font-weight: 620;
+    letter-spacing: 0.01em;
   }
 
   .footprint-results-header h2 > span {
@@ -1272,13 +1353,37 @@ const mapData = JSON.stringify(locations).replace(/</g, "\\u003c");
     overflow-x: hidden;
     overflow-y: auto;
     overscroll-behavior: contain;
-    padding: 0.8rem;
+    padding: 0;
+    scrollbar-color: color-mix(in srgb, var(--foreground) 24%, transparent)
+      transparent;
     scrollbar-gutter: stable;
+    scrollbar-width: thin;
+  }
+
+  .footprint-results-body::-webkit-scrollbar {
+    width: 7px;
+  }
+
+  .footprint-results-body::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .footprint-results-body::-webkit-scrollbar-thumb {
+    border: 2px solid transparent;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--foreground) 28%, transparent);
+    background-clip: padding-box;
+  }
+
+  .footprint-results-body::-webkit-scrollbar-thumb:hover {
+    background: color-mix(in srgb, var(--foreground) 42%, transparent);
+    background-clip: padding-box;
   }
 
   #footprint-gallery {
     display: grid;
-    gap: 1.35rem;
+    gap: 0;
+    padding: 0.95rem var(--journal-gutter) 1.1rem;
   }
 
   .footprint-entry {
@@ -1290,9 +1395,18 @@ const mapData = JSON.stringify(locations).replace(/</g, "\\u003c");
     display: none;
   }
 
+  .footprint-entry + .footprint-entry {
+    margin-top: 1.45rem;
+    padding-top: 1.2rem;
+    border-top: 1px solid
+      color-mix(in srgb, var(--foreground) 9%, transparent);
+  }
+
   .footprint-date {
-    color: color-mix(in srgb, var(--foreground) 58%, transparent);
-    font-size: 0.76rem;
+    color: color-mix(in srgb, var(--foreground) 54%, transparent);
+    font-size: 0.7rem;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.025em;
     line-height: 1.35;
     white-space: nowrap;
   }
@@ -1302,7 +1416,7 @@ const mapData = JSON.stringify(locations).replace(/</g, "\\u003c");
     grid-template-columns: minmax(0, 1fr) auto;
     align-items: center;
     gap: 0.55rem;
-    margin-bottom: 0.55rem;
+    margin-bottom: 0.6rem;
   }
 
   .footprint-entry-heading h3 {
@@ -1315,8 +1429,9 @@ const mapData = JSON.stringify(locations).replace(/</g, "\\u003c");
     margin: 0;
     min-width: 0;
     color: color-mix(in srgb, var(--foreground) 88%, transparent);
-    font-size: 0.74rem;
-    font-weight: 600;
+    font-size: 0.72rem;
+    font-weight: 620;
+    letter-spacing: 0.015em;
     white-space: nowrap;
   }
 
@@ -1337,7 +1452,7 @@ const mapData = JSON.stringify(locations).replace(/</g, "\\u003c");
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
     width: 100%;
-    gap: 3px;
+    gap: 2px;
     overflow: hidden;
     border: 0;
     border-radius: 0;
@@ -1350,7 +1465,7 @@ const mapData = JSON.stringify(locations).replace(/</g, "\\u003c");
 
   .footprint-photo-grid[data-layout="quad"] {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    width: calc((100% - 3px) * 2 / 3 + 3px);
+    width: calc((100% - 2px) * 2 / 3 + 2px);
   }
 
   .footprint-photo {
@@ -1439,21 +1554,141 @@ const mapData = JSON.stringify(locations).replace(/</g, "\\u003c");
   }
 
   .footprint-note {
-    margin: 0.55rem 0 0;
-    color: color-mix(in srgb, var(--foreground) 58%, transparent);
-    font-size: 0.76rem;
-    line-height: 1.55;
+    margin: 0.62rem 0 0;
+    color: color-mix(in srgb, var(--foreground) 56%, transparent);
+    font-size: 0.73rem;
+    line-height: 1.65;
+  }
+
+  .footprint-related-posts {
+    margin: -0.16rem 0 0.52rem;
+  }
+
+  .footprint-related-posts ul {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .footprint-related-disclosure summary {
+    display: grid;
+    grid-template-columns: 0.9rem minmax(0, 1fr) 0.8rem;
+    gap: 0.45rem;
+    align-items: center;
+    padding: 0.16rem 0.08rem 0.28rem;
+    color: color-mix(in srgb, var(--foreground) 52%, transparent);
+    font-size: 0.69rem;
+    line-height: 1.45;
+    list-style: none;
+    cursor: pointer;
+    transition: color 160ms ease;
+  }
+
+  .footprint-related-disclosure summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .footprint-related-disclosure summary:hover,
+  .footprint-related-disclosure summary:focus-visible {
+    color: var(--foreground);
+  }
+
+  .footprint-related-disclosure summary svg {
+    width: 100%;
+    height: auto;
+    fill: none;
+    stroke: currentColor;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 1.55;
+  }
+
+  .footprint-related-disclosure summary svg:first-child {
+    color: color-mix(in srgb, var(--accent) 68%, var(--foreground));
+  }
+
+  .footprint-related-disclosure summary svg:last-child {
+    transition: transform 160ms ease;
+  }
+
+  .footprint-related-disclosure[open] summary svg:last-child {
+    transform: rotate(180deg);
+  }
+
+  .footprint-related-disclosure[open] ul {
+    margin-top: 0.2rem;
+  }
+
+  .footprint-related-posts li + li {
+    border-top: 1px solid
+      color-mix(in srgb, var(--foreground) 7%, transparent);
+  }
+
+  .footprint-related-posts a {
+    display: grid;
+    grid-template-columns: 0.9rem minmax(0, 1fr) 0.8rem;
+    gap: 0.45rem;
+    align-items: center;
+    padding: 0.4rem 0.08rem;
+    color: color-mix(in srgb, var(--foreground) 82%, transparent);
+    font-size: 0.75rem;
+    line-height: 1.45;
+    text-decoration: none;
+    transition: color 160ms ease;
+  }
+
+  .footprint-related-posts:not(.is-single)
+    .footprint-related-disclosure
+    li:first-child {
+    border-top: 1px solid
+      color-mix(in srgb, var(--foreground) 7%, transparent);
+  }
+
+  .footprint-related-posts a span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .footprint-related-posts a svg {
+    width: 100%;
+    height: auto;
+    fill: none;
+    stroke: currentColor;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 1.55;
+  }
+
+  .footprint-related-posts a svg:first-child {
+    color: color-mix(in srgb, var(--accent) 68%, var(--foreground));
+  }
+
+  .footprint-related-posts a svg:last-child {
+    color: color-mix(in srgb, var(--foreground) 34%, transparent);
+    transition: transform 160ms ease;
+  }
+
+  .footprint-related-posts a:hover,
+  .footprint-related-posts a:focus-visible {
+    color: var(--accent);
+  }
+
+  .footprint-related-posts a:hover svg:last-child,
+  .footprint-related-posts a:focus-visible svg:last-child {
+    transform: translate(1px, -1px);
   }
 
   .footprints-empty {
-    padding: 2.5rem 0;
+    padding: 2.5rem var(--journal-gutter);
     color: color-mix(in srgb, var(--foreground) 54%, transparent);
     text-align: center;
   }
 
   #footprints-load-more {
     display: block;
-    margin: 1.25rem auto 0;
+    margin: 0.15rem auto 1rem;
     padding: 0.55rem 1rem;
     border: 1px solid color-mix(in srgb, var(--border) 76%, transparent);
     border-radius: 999px;
@@ -1485,6 +1720,8 @@ const mapData = JSON.stringify(locations).replace(/</g, "\\u003c");
     }
 
     .footprint-results-panel {
+      --journal-gutter: 0.85rem;
+
       top: auto;
       right: 0.5rem;
       bottom: 0.5rem;
@@ -1505,7 +1742,7 @@ const mapData = JSON.stringify(locations).replace(/</g, "\\u003c");
     }
 
     .footprint-results-header {
-      padding: 0.65rem 0.7rem;
+      padding: 0.7rem var(--journal-gutter) 0.66rem;
     }
 
     #footprints-panel-expand {
@@ -1513,7 +1750,7 @@ const mapData = JSON.stringify(locations).replace(/</g, "\\u003c");
     }
 
     .footprint-results-body {
-      padding: 0.7rem;
+      padding: 0;
     }
 
     .footprints-map-shell.is-panel-open .footprints-map .leaflet-right {

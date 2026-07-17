@@ -1,12 +1,14 @@
 import type { APIRoute, GetStaticPaths } from "astro";
 import { getImage } from "astro:assets";
 import { getCollection } from "astro:content";
+import { getPath } from "@/utils/getPath";
 
 const normalizeId = (id: string) => id.replace(/\.(md|mdx)$/, "");
 const entriesPromise = getCollection(
   "footprints",
   ({ data }) => !data.draft
 );
+const postsPromise = getCollection("blog", ({ data }) => !data.draft);
 
 export const getStaticPaths: GetStaticPaths = async () => {
   const entries = await entriesPromise;
@@ -48,6 +50,20 @@ export const GET: APIRoute = async ({ params }) => {
       };
     })
   );
+  const posts = await postsPromise;
+  const postsById = new Map(posts.map(post => [post.id, post]));
+  const relatedPosts = entry.data.relatedPosts.flatMap(reference => {
+    const post = postsById.get(reference.id);
+    if (!post) return [];
+
+    return [
+      {
+        id: post.id,
+        title: post.data.title,
+        href: getPath(post.id, post.filePath),
+      },
+    ];
+  });
 
   return new Response(
     JSON.stringify({
@@ -59,11 +75,14 @@ export const GET: APIRoute = async ({ params }) => {
       region: entry.data.region,
       note: entry.body?.trim() ?? "",
       photos,
+      relatedPosts,
     }),
     {
       headers: {
         "Content-Type": "application/json; charset=utf-8",
-        "Cache-Control": "public, max-age=31536000, immutable",
+        "Cache-Control": import.meta.env.PROD
+          ? "public, max-age=31536000, immutable"
+          : "no-store",
       },
     }
   );

@@ -4,10 +4,9 @@ import { getCollection } from "astro:content";
 import { getPath } from "@/utils/getPath";
 
 const normalizeId = (id: string) => id.replace(/\.(md|mdx)$/, "");
-const entriesPromise = getCollection(
-  "footprints",
-  ({ data }) => !data.draft
-);
+const GALLERY_MAX_EDGE = 2560;
+const GALLERY_QUALITY = 82;
+const entriesPromise = getCollection("footprints", ({ data }) => !data.draft);
 const postsPromise = getCollection("blog", ({ data }) => !data.draft);
 
 export const getStaticPaths: GetStaticPaths = async () => {
@@ -32,18 +31,34 @@ export const GET: APIRoute = async ({ params }) => {
 
   const photos = await Promise.all(
     entry.data.photos.map(async photo => {
-      const thumbnail = await getImage({
-        src: photo.src,
-        width: 240,
-        format: "webp",
-        quality: 76,
-      });
+      const scale = Math.min(
+        1,
+        GALLERY_MAX_EDGE / Math.max(photo.src.width, photo.src.height)
+      );
+      const galleryWidth = Math.max(1, Math.round(photo.src.width * scale));
+      const galleryHeight = Math.max(1, Math.round(photo.src.height * scale));
+      const [thumbnail, galleryImage] = await Promise.all([
+        getImage({
+          src: photo.src,
+          width: 240,
+          format: "webp",
+          quality: 76,
+        }),
+        // Astro's Sharp service re-encodes the image without copying source
+        // EXIF/GPS/camera metadata into the public gallery asset.
+        getImage({
+          src: photo.src,
+          width: galleryWidth,
+          format: "webp",
+          quality: GALLERY_QUALITY,
+        }),
+      ]);
 
       return {
         thumbnail: thumbnail.src,
-        original: photo.src.src,
-        width: photo.src.width,
-        height: photo.src.height,
+        original: galleryImage.src,
+        width: galleryWidth,
+        height: galleryHeight,
         alt: photo.alt,
         caption: photo.caption,
         position: photo.position,

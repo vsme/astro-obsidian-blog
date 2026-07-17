@@ -21,8 +21,7 @@ const sortedEntries = sourceEntries.sort(
 );
 const totalCities = new Set(
   sortedEntries.map(
-    entry =>
-      `${entry.data.country}/${entry.data.region}/${entry.data.city}`
+    entry => `${entry.data.country}/${entry.data.region}/${entry.data.city}`
   )
 ).size;
 
@@ -156,7 +155,6 @@ const mapData = JSON.stringify(locations).replace(/</g, "\\u003c");
         </div>
       </aside>
     </section>
-
   </main>
 
   <Footer />
@@ -257,9 +255,7 @@ const mapData = JSON.stringify(locations).replace(/</g, "\\u003c");
     const heading = document.querySelector<HTMLElement>(
       "#journal-heading-text"
     );
-    const panel = document.querySelector<HTMLElement>(
-      "#footprint-journal"
-    );
+    const panel = document.querySelector<HTMLElement>("#footprint-journal");
     const panelBody = document.querySelector<HTMLElement>(
       "#footprints-results-body"
     );
@@ -269,9 +265,7 @@ const mapData = JSON.stringify(locations).replace(/</g, "\\u003c");
     const panelCloseButton = document.querySelector<HTMLButtonElement>(
       "#footprints-panel-close"
     );
-    const mapShell = mapElement.closest<HTMLElement>(
-      ".footprints-map-shell"
-    );
+    const mapShell = mapElement.closest<HTMLElement>(".footprints-map-shell");
 
     if (
       !gallery ||
@@ -286,6 +280,41 @@ const mapData = JSON.stringify(locations).replace(/</g, "\\u003c");
     ) {
       return;
     }
+
+    const isLightGalleryTarget = (target: EventTarget | null) =>
+      target instanceof Element && target.closest(".lg-outer");
+    const blockSecondaryGalleryDrag = (event: MouseEvent) => {
+      if (event.button === 0 || !isLightGalleryTarget(event.target)) return;
+      // lightGallery 2.9 beta treats every mouse button as a drag start.
+      // Keep the native context menu, but do not let a right press enter its
+      // internal dragging state.
+      event.stopPropagation();
+    };
+    const releaseGalleryDragAfterContextMenu = (event: MouseEvent) => {
+      const outer = isLightGalleryTarget(event.target);
+      if (!(outer instanceof HTMLElement)) return;
+      window.setTimeout(() => {
+        window.dispatchEvent(
+          new MouseEvent("mouseup", {
+            bubbles: true,
+            button: 2,
+            clientX: event.clientX,
+            clientY: event.clientY,
+          })
+        );
+        outer.classList.remove("lg-grabbing", "lg-dragging", "lg-hide-items");
+        outer.classList.add("lg-grab", "lg-components-open");
+        outer
+          .closest(".lg-container")
+          ?.classList.remove("lg-dragging-vertical");
+      }, 0);
+    };
+    document.addEventListener("mousedown", blockSecondaryGalleryDrag, true);
+    document.addEventListener(
+      "contextmenu",
+      releaseGalleryDragAfterContextMenu,
+      true
+    );
 
     const dayFormatter = new Intl.DateTimeFormat("en-US", {
       day: "2-digit",
@@ -304,10 +333,7 @@ const mapData = JSON.stringify(locations).replace(/</g, "\\u003c");
       timeZone: timezone,
     });
     const locationById = new Map(
-      locations.map((location, index) => [
-        location.id,
-        { ...location, index },
-      ])
+      locations.map((location, index) => [location.id, { ...location, index }])
     );
     const SAME_LOCATION_RADIUS_METERS = 30;
     const distanceBetween = (
@@ -405,19 +431,20 @@ const mapData = JSON.stringify(locations).replace(/</g, "\\u003c");
             total + (markerVisualData.get(marker)?.photoCount ?? 0),
           0
         );
-        const cover = children
-          .map(marker => markerVisualData.get(marker))
-          .filter(
-            (
-              visual
-            ): visual is { id: string; cover: string; photoCount: number } =>
-              Boolean(visual)
-          )
-          .sort(
-            (a, b) =>
-              (locationById.get(a.id)?.index ?? Number.MAX_SAFE_INTEGER) -
-              (locationById.get(b.id)?.index ?? Number.MAX_SAFE_INTEGER)
-          )[0]?.cover ?? "";
+        const cover =
+          children
+            .map(marker => markerVisualData.get(marker))
+            .filter(
+              (
+                visual
+              ): visual is { id: string; cover: string; photoCount: number } =>
+                Boolean(visual)
+            )
+            .sort(
+              (a, b) =>
+                (locationById.get(a.id)?.index ?? Number.MAX_SAFE_INTEGER) -
+                (locationById.get(b.id)?.index ?? Number.MAX_SAFE_INTEGER)
+            )[0]?.cover ?? "";
 
         return L.divIcon({
           className: "footprint-map-icon",
@@ -461,10 +488,7 @@ const mapData = JSON.stringify(locations).replace(/</g, "\\u003c");
         ? availableHeight
         : Math.min(availableHeight, aspectRatioHeight);
 
-      mapShell.style.setProperty(
-        "--footprints-map-height",
-        `${mapHeight}px`
-      );
+      mapShell.style.setProperty("--footprints-map-height", `${mapHeight}px`);
       requestAnimationFrame(() => map.invalidateSize({ pan: false }));
     };
 
@@ -484,10 +508,7 @@ const mapData = JSON.stringify(locations).replace(/</g, "\\u003c");
         "aria-label",
         isExpanded ? "还原照片面板" : "展开照片面板"
       );
-      panelExpandButton.title = isExpanded
-        ? "还原照片面板"
-        : "展开照片面板";
-
+      panelExpandButton.title = isExpanded ? "还原照片面板" : "展开照片面板";
     };
 
     const getPanelAwarePadding = () => {
@@ -521,9 +542,7 @@ const mapData = JSON.stringify(locations).replace(/</g, "\\u003c");
     const overview = document.querySelector<HTMLElement>(
       ".footprints-overview"
     );
-    const overviewResizeObserver = new ResizeObserver(
-      updateMapViewportHeight
-    );
+    const overviewResizeObserver = new ResizeObserver(updateMapViewportHeight);
     if (overview) overviewResizeObserver.observe(overview);
     updateMapViewportHeight();
     window.addEventListener("resize", updateMapViewportHeight);
@@ -546,10 +565,7 @@ const mapData = JSON.stringify(locations).replace(/</g, "\\u003c");
         "http://www.w3.org/2000/svg",
         "path"
       );
-      pin.setAttribute(
-        "d",
-        "M20 10c0 5-8 11-8 11S4 15 4 10a8 8 0 1 1 16 0Z"
-      );
+      pin.setAttribute("d", "M20 10c0 5-8 11-8 11S4 15 4 10a8 8 0 1 1 16 0Z");
       const center = document.createElementNS(
         "http://www.w3.org/2000/svg",
         "circle"
@@ -561,9 +577,7 @@ const mapData = JSON.stringify(locations).replace(/</g, "\\u003c");
       return icon;
     };
 
-    const createRelatedIcon = (
-      kind: "article" | "arrow" | "chevron"
-    ) => {
+    const createRelatedIcon = (kind: "article" | "arrow" | "chevron") => {
       const icon = document.createElementNS(
         "http://www.w3.org/2000/svg",
         "svg"
@@ -917,9 +931,8 @@ const mapData = JSON.stringify(locations).replace(/</g, "\\u003c");
         .getAllChildMarkers()
         .map((marker: L.Marker) => markerVisualData.get(marker)?.id)
         .filter((id: string | undefined): id is string => Boolean(id));
-      const clusterZoom = (
-        cluster as L.MarkerCluster & { _zoom?: number }
-      )._zoom;
+      const clusterZoom = (cluster as L.MarkerCluster & { _zoom?: number })
+        ._zoom;
       const isSameLocation = shareLocation(selectedIds);
       const canSplit = (clusterZoom ?? map.getZoom()) < map.getMaxZoom();
 
@@ -1002,6 +1015,16 @@ const mapData = JSON.stringify(locations).replace(/</g, "\\u003c");
       "astro:before-swap",
       () => {
         window.removeEventListener("resize", updateMapViewportHeight);
+        document.removeEventListener(
+          "mousedown",
+          blockSecondaryGalleryDrag,
+          true
+        );
+        document.removeEventListener(
+          "contextmenu",
+          releaseGalleryDragAfterContextMenu,
+          true
+        );
         overviewResizeObserver.disconnect();
       },
       { once: true }
@@ -1352,9 +1375,7 @@ const mapData = JSON.stringify(locations).replace(/</g, "\\u003c");
     display: none;
   }
 
-  .footprint-results-panel[data-state="expanded"]
-    #footprints-panel-expand
-    svg {
+  .footprint-results-panel[data-state="expanded"] #footprints-panel-expand svg {
     transform: rotate(180deg);
   }
 
@@ -1409,8 +1430,7 @@ const mapData = JSON.stringify(locations).replace(/</g, "\\u003c");
   .footprint-entry + .footprint-entry {
     margin-top: 1.45rem;
     padding-top: 1.2rem;
-    border-top: 1px solid
-      color-mix(in srgb, var(--foreground) 9%, transparent);
+    border-top: 1px solid color-mix(in srgb, var(--foreground) 9%, transparent);
   }
 
   .footprint-date {
@@ -1594,8 +1614,7 @@ const mapData = JSON.stringify(locations).replace(/</g, "\\u003c");
   }
 
   .footprint-related-posts li + li {
-    border-top: 1px solid
-      color-mix(in srgb, var(--foreground) 7%, transparent);
+    border-top: 1px solid color-mix(in srgb, var(--foreground) 7%, transparent);
   }
 
   .footprint-related-posts a {
@@ -1614,8 +1633,7 @@ const mapData = JSON.stringify(locations).replace(/</g, "\\u003c");
   .footprint-related-posts:not(.is-single)
     .footprint-related-disclosure
     li:first-child {
-    border-top: 1px solid
-      color-mix(in srgb, var(--foreground) 7%, transparent);
+    border-top: 1px solid color-mix(in srgb, var(--foreground) 7%, transparent);
   }
 
   .footprint-related-posts a span {
@@ -1731,7 +1749,6 @@ const mapData = JSON.stringify(locations).replace(/</g, "\\u003c");
       grid-template-columns: minmax(0, 1fr) auto;
       gap: 0.5rem;
     }
-
   }
 
   @media (max-width: 420px) {

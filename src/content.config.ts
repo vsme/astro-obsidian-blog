@@ -42,6 +42,9 @@ const footprints = defineCollection({
       visitedAt: z.date(),
       country: z.string(),
       city: z.string(),
+      district: z.string().optional(),
+      town: z.string().optional(),
+      street: z.string().optional(),
       place: z.string(),
       region: z.string(),
       coordinates: z.object({

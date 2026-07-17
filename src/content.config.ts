@@ -1,6 +1,6 @@
 import { defineCollection, z } from "astro:content";
 import { glob } from "astro/loaders";
-import { SITE, BLOG_PATH, DIARY_PATH } from "@/config";
+import { SITE, BLOG_PATH, DIARY_PATH, FOOTPRINTS_PATH } from "@/config";
 
 const blog = defineCollection({
   loader: glob({ pattern: "**/[^_]*.{md,mdx}", base: `./${BLOG_PATH}` }),
@@ -32,4 +32,34 @@ const diary = defineCollection({
   }),
 });
 
-export const collections = { blog, diary };
+const footprints = defineCollection({
+  loader: glob({
+    pattern: "**/[^_]*.{md,mdx}",
+    base: `./${FOOTPRINTS_PATH}`,
+  }),
+  schema: ({ image }) =>
+    z.object({
+      visitedAt: z.date(),
+      country: z.string(),
+      city: z.string(),
+      place: z.string(),
+      region: z.string(),
+      coordinates: z.object({
+        lat: z.number(),
+        lng: z.number(),
+      }),
+      draft: z.boolean().optional(),
+      photos: z
+        .array(
+          z.object({
+            src: image(),
+            alt: z.string(),
+            caption: z.string().optional(),
+            position: z.string().optional(),
+          })
+        )
+        .min(1),
+    }),
+});
+
+export const collections = { blog, diary, footprints };

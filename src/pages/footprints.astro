@@ -1,0 +1,1570 @@
+---
+import { getCollection } from "astro:content";
+import { getImage } from "astro:assets";
+import Layout from "@/layouts/Layout.astro";
+import Header from "@/components/Header.astro";
+import Breadcrumb from "@/components/Breadcrumb.astro";
+import Footer from "@/components/Footer.astro";
+import { SITE } from "@/config";
+import "leaflet/dist/leaflet.css";
+import "leaflet.markercluster/dist/MarkerCluster.css";
+import "lightgallery/css/lightgallery.css";
+import "lightgallery/css/lg-zoom.css";
+
+const sourceEntries = await getCollection(
+  "footprints",
+  ({ data }) => !data.draft
+);
+
+const sortedEntries = sourceEntries.sort(
+  (a, b) => b.data.visitedAt.getTime() - a.data.visitedAt.getTime()
+);
+const totalCities = new Set(
+  sortedEntries.map(
+    entry =>
+      `${entry.data.country}/${entry.data.region}/${entry.data.city}`
+  )
+).size;
+
+type MapLocation = {
+  id: string;
+  visitedAt: string;
+  coordinates: { lat: number; lng: number };
+  cover: string;
+  photoCount: number;
+};
+
+const locations: MapLocation[] = await Promise.all(
+  sortedEntries.map(async entry => {
+    const mapCover = await getImage({
+      src: entry.data.photos[0].src,
+      width: 80,
+      height: 80,
+      fit: "cover",
+      position: "center",
+      format: "webp",
+      quality: 68,
+    });
+
+    return {
+      id: entry.id.replace(/\.(md|mdx)$/, ""),
+      visitedAt: entry.data.visitedAt.toISOString(),
+      coordinates: entry.data.coordinates,
+      cover: mapCover.src,
+      photoCount: entry.data.photos.length,
+    };
+  })
+);
+const mapData = JSON.stringify(locations).replace(/</g, "\\u003c");
+---
+
+<Layout
+  title={`足迹 | ${SITE.title}`}
+  description="用地图与照片记录抵达过的地方。"
+>
+  <Header />
+  <Breadcrumb />
+
+  <main
+    id="main-content"
+    class="footprints-page mx-auto mt-4 w-full max-w-app px-4 pb-12"
+  >
+    <header class="footprints-overview">
+      <div>
+        <h1 class="text-2xl font-semibold sm:text-3xl">
+          <span>{totalCities}</span> 个城市 ·
+          <span>{locations.length}</span> 个足迹
+        </h1>
+      </div>
+      <p class="footprints-tagline">地图标记去向，照片留下当时的光。</p>
+    </header>
+
+    <section
+      class="footprints-map-shell"
+      aria-labelledby="footprints-map-heading"
+    >
+      <h2 id="footprints-map-heading" class="sr-only">照片足迹地图</h2>
+      <div
+        id="footprints-map"
+        class="footprints-map"
+        role="region"
+        aria-label="可缩放的照片足迹地图，点击照片标记筛选下方记录"
+      >
+      </div>
+
+      <aside
+        id="footprint-journal"
+        class="footprint-results-panel"
+        aria-labelledby="journal-heading"
+        aria-hidden="true"
+        data-state="closed"
+        inert
+      >
+        <header class="footprint-results-header">
+          <h2 id="journal-heading">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <rect x="3" y="5" width="15" height="14" rx="2"></rect>
+              <path d="m7 14 2.5-2.5 2.2 2.2 1.5-1.5L18 17"></path>
+              <path d="M7 3h14v14"></path>
+            </svg>
+            <span id="journal-heading-text">当前标记</span>
+          </h2>
+
+          <div class="footprint-results-actions">
+            <button
+              id="footprints-panel-expand"
+              type="button"
+              aria-label="展开照片面板"
+              aria-expanded="false"
+              title="展开照片面板"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="m6 15 6-6 6 6"></path>
+              </svg>
+            </button>
+            <button
+              id="footprints-panel-close"
+              type="button"
+              aria-label="关闭照片面板"
+              title="关闭照片面板"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="m6 6 12 12M18 6 6 18"></path>
+              </svg>
+            </button>
+          </div>
+        </header>
+
+        <div id="footprints-results-body" class="footprint-results-body">
+          <div id="footprint-gallery" aria-live="polite"></div>
+
+          <p id="footprints-empty" class="footprints-empty">
+            正在加载照片记录…
+          </p>
+
+          <button id="footprints-load-more" type="button" hidden>
+            加载更多
+          </button>
+        </div>
+      </aside>
+    </section>
+
+  </main>
+
+  <Footer />
+
+  <script
+    is:inline
+    id="footprints-map-data"
+    type="application/json"
+    data-timezone={SITE.timezone}
+    set:html={mapData}
+  />
+</Layout>
+
+<script>
+  import L from "leaflet";
+  import "leaflet.markercluster";
+
+  type LocationData = {
+    id: string;
+    visitedAt: string;
+    coordinates: { lat: number; lng: number };
+    cover: string;
+    photoCount: number;
+  };
+
+  type FootprintPhoto = {
+    thumbnail: string;
+    original: string;
+    width: number;
+    height: number;
+    alt: string;
+    caption?: string;
+    position?: string;
+  };
+
+  type FootprintRecord = {
+    id: string;
+    visitedAt: string;
+    country: string;
+    city: string;
+    place: string;
+    region: string;
+    note: string;
+    photos: FootprintPhoto[];
+  };
+
+  const initializeFootprints = async () => {
+    const mapElement = document.querySelector<HTMLElement>("#footprints-map");
+    const dataElement = document.querySelector<HTMLScriptElement>(
+      "#footprints-map-data"
+    );
+
+    if (
+      !mapElement ||
+      !dataElement ||
+      mapElement.dataset.initialized === "true"
+    ) {
+      return;
+    }
+
+    mapElement.dataset.initialized = "true";
+    const locations = JSON.parse(
+      dataElement.textContent || "[]"
+    ) as LocationData[];
+    const map = L.map(mapElement, {
+      zoomControl: false,
+      scrollWheelZoom: true,
+      attributionControl: true,
+    });
+    const mapZoomControl = L.control
+      .zoom({ position: "bottomleft" })
+      .addTo(map);
+    map.attributionControl.setPrefix(false);
+
+    const pointPane = map.createPane("footprint-point-pane");
+    const clusterPane = map.createPane("footprint-cluster-pane");
+    pointPane.style.zIndex = "610";
+    clusterPane.style.zIndex = "620";
+
+    L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      maxZoom: 19,
+      attribution:
+        '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+    }).addTo(map);
+
+    const timezone = dataElement.dataset.timezone || "Asia/Shanghai";
+    const gallery = document.querySelector<HTMLElement>("#footprint-gallery");
+    const empty = document.querySelector<HTMLElement>("#footprints-empty");
+    const loadMoreButton = document.querySelector<HTMLButtonElement>(
+      "#footprints-load-more"
+    );
+    const heading = document.querySelector<HTMLElement>(
+      "#journal-heading-text"
+    );
+    const panel = document.querySelector<HTMLElement>(
+      "#footprint-journal"
+    );
+    const panelBody = document.querySelector<HTMLElement>(
+      "#footprints-results-body"
+    );
+    const panelExpandButton = document.querySelector<HTMLButtonElement>(
+      "#footprints-panel-expand"
+    );
+    const panelCloseButton = document.querySelector<HTMLButtonElement>(
+      "#footprints-panel-close"
+    );
+    const mapShell = mapElement.closest<HTMLElement>(
+      ".footprints-map-shell"
+    );
+
+    if (
+      !gallery ||
+      !empty ||
+      !loadMoreButton ||
+      !heading ||
+      !panel ||
+      !panelBody ||
+      !panelExpandButton ||
+      !panelCloseButton ||
+      !mapShell
+    ) {
+      return;
+    }
+
+    const dayFormatter = new Intl.DateTimeFormat("en-US", {
+      day: "2-digit",
+      timeZone: timezone,
+    });
+    const monthFormatter = new Intl.DateTimeFormat("en-US", {
+      month: "2-digit",
+      timeZone: timezone,
+    });
+    const yearFormatter = new Intl.DateTimeFormat("en-US", {
+      year: "numeric",
+      timeZone: timezone,
+    });
+    const weekdayFormatter = new Intl.DateTimeFormat("zh-CN", {
+      weekday: "short",
+      timeZone: timezone,
+    });
+    const locationById = new Map(
+      locations.map((location, index) => [
+        location.id,
+        { ...location, index },
+      ])
+    );
+
+    const markers = new Map<string, L.Marker>();
+    const markerVisualData = new WeakMap<
+      L.Marker,
+      { id: string; cover: string; photoCount: number }
+    >();
+    const createPhotoMarkerContent = (
+      cover: string,
+      photoCount: number,
+      label?: string
+    ) => {
+      const markerContent = document.createElement("div");
+      markerContent.className = "photo-map-marker";
+      if (label) {
+        markerContent.setAttribute("aria-label", label);
+      } else {
+        markerContent.setAttribute("aria-hidden", "true");
+      }
+
+      const image = document.createElement("img");
+      image.src = cover;
+      image.alt = "";
+      image.loading = "eager";
+      image.decoding = "sync";
+
+      const badge = document.createElement("span");
+      badge.textContent = String(photoCount);
+
+      markerContent.append(image, badge);
+      return markerContent;
+    };
+    const markerClusters = L.markerClusterGroup({
+      showCoverageOnHover: false,
+      zoomToBoundsOnClick: false,
+      spiderfyOnMaxZoom: false,
+      clusterPane: "footprint-cluster-pane",
+      maxClusterRadius: 40,
+      iconCreateFunction: cluster => {
+        const children = cluster.getAllChildMarkers();
+        const photoCount = children.reduce(
+          (total, marker) =>
+            total + (markerVisualData.get(marker)?.photoCount ?? 0),
+          0
+        );
+        const cover = children
+          .map(marker => markerVisualData.get(marker))
+          .filter(
+            (
+              visual
+            ): visual is { id: string; cover: string; photoCount: number } =>
+              Boolean(visual)
+          )
+          .sort(
+            (a, b) =>
+              (locationById.get(a.id)?.index ?? Number.MAX_SAFE_INTEGER) -
+              (locationById.get(b.id)?.index ?? Number.MAX_SAFE_INTEGER)
+          )[0]?.cover ?? "";
+
+        return L.divIcon({
+          className: "footprint-map-icon",
+          html: createPhotoMarkerContent(
+            cover,
+            photoCount,
+            `${photoCount} 张照片`
+          ),
+          iconSize: [44, 51],
+          iconAnchor: [22, 50],
+        });
+      },
+    }).addTo(map);
+    const bounds: [number, number][] = [];
+
+    type GalleryInstance = {
+      refresh: () => void;
+      destroy: () => number;
+    };
+
+    const PAGE_SIZE = 20;
+    let activeIds: string[] = [];
+    let loadedCount = 0;
+    let selectionVersion = 0;
+    let isLoading = false;
+    let galleryInstances: GalleryInstance[] = [];
+    type PanelState = "closed" | "half" | "expanded";
+    let panelState: PanelState = "closed";
+    const mobilePanelQuery = window.matchMedia("(max-width: 768px)");
+
+    const updateMapViewportHeight = () => {
+      const viewportHeight = window.innerHeight;
+      const mapTop = mapShell.getBoundingClientRect().top + window.scrollY;
+      const bottomGap = mobilePanelQuery.matches ? 20 : 30;
+      const availableHeight = Math.max(
+        0,
+        Math.floor(viewportHeight - mapTop - bottomGap)
+      );
+      const aspectRatioHeight = Math.floor(mapShell.clientWidth);
+      const mapHeight = mobilePanelQuery.matches
+        ? availableHeight
+        : Math.min(availableHeight, aspectRatioHeight);
+
+      mapShell.style.setProperty(
+        "--footprints-map-height",
+        `${mapHeight}px`
+      );
+      requestAnimationFrame(() => map.invalidateSize({ pan: false }));
+    };
+
+    const updatePanelMetrics = () => {
+      mapShell.style.setProperty(
+        "--footprints-panel-width",
+        `${panel.offsetWidth}px`
+      );
+      mapShell.style.setProperty(
+        "--footprints-panel-height",
+        `${panel.offsetHeight}px`
+      );
+    };
+
+    const setPanelState = (state: PanelState) => {
+      panelState =
+        !mobilePanelQuery.matches && state === "expanded" ? "half" : state;
+      const isOpen = panelState !== "closed";
+      const isExpanded = panelState === "expanded";
+
+      panel.dataset.state = panelState;
+      panel.setAttribute("aria-hidden", String(!isOpen));
+      panel.toggleAttribute("inert", !isOpen);
+      mapShell.classList.toggle("is-panel-open", isOpen);
+      mapShell.classList.toggle("is-panel-expanded", isExpanded);
+      panelExpandButton.setAttribute("aria-expanded", String(isExpanded));
+      panelExpandButton.setAttribute(
+        "aria-label",
+        isExpanded ? "还原照片面板" : "展开照片面板"
+      );
+      panelExpandButton.title = isExpanded
+        ? "还原照片面板"
+        : "展开照片面板";
+
+      requestAnimationFrame(updatePanelMetrics);
+    };
+
+    const getPanelAwarePadding = () => {
+      const paddingTopLeft: L.PointTuple = [56, 72];
+      let right = 56;
+      let bottom = 52;
+
+      if (panelState !== "closed") {
+        if (mobilePanelQuery.matches) {
+          bottom += panel.offsetHeight + 12;
+        } else {
+          right += panel.offsetWidth + 12;
+        }
+      }
+
+      right = Math.min(
+        right,
+        Math.max(56, mapElement.clientWidth - paddingTopLeft[0] - 96)
+      );
+      bottom = Math.min(
+        bottom,
+        Math.max(52, mapElement.clientHeight - paddingTopLeft[1] - 80)
+      );
+
+      return {
+        paddingTopLeft,
+        paddingBottomRight: [right, bottom] as L.PointTuple,
+      };
+    };
+
+    const panelResizeObserver = new ResizeObserver(updatePanelMetrics);
+    panelResizeObserver.observe(panel);
+    const overview = document.querySelector<HTMLElement>(
+      ".footprints-overview"
+    );
+    const overviewResizeObserver = new ResizeObserver(
+      updateMapViewportHeight
+    );
+    if (overview) overviewResizeObserver.observe(overview);
+    updateMapViewportHeight();
+    window.addEventListener("resize", updateMapViewportHeight);
+    mobilePanelQuery.addEventListener("change", () => {
+      updateMapViewportHeight();
+      if (!mobilePanelQuery.matches && panelState === "expanded") {
+        setPanelState("half");
+      } else {
+        updatePanelMetrics();
+      }
+    });
+
+    const createPinIcon = () => {
+      const icon = document.createElementNS(
+        "http://www.w3.org/2000/svg",
+        "svg"
+      );
+      icon.setAttribute("viewBox", "0 0 24 24");
+      icon.setAttribute("aria-hidden", "true");
+
+      const pin = document.createElementNS(
+        "http://www.w3.org/2000/svg",
+        "path"
+      );
+      pin.setAttribute(
+        "d",
+        "M20 10c0 5-8 11-8 11S4 15 4 10a8 8 0 1 1 16 0Z"
+      );
+      const center = document.createElementNS(
+        "http://www.w3.org/2000/svg",
+        "circle"
+      );
+      center.setAttribute("cx", "12");
+      center.setAttribute("cy", "10");
+      center.setAttribute("r", "2.5");
+      icon.append(pin, center);
+      return icon;
+    };
+
+    const escapeHTML = (value: string) =>
+      value.replace(
+        /[&<>"']/g,
+        character =>
+          ({
+            "&": "&amp;",
+            "<": "&lt;",
+            ">": "&gt;",
+            '"': "&quot;",
+            "'": "&#039;",
+          })[character] || character
+      );
+
+    const renderFootprintEntry = (record: FootprintRecord) => {
+      const entry = document.createElement("article");
+      entry.className = "footprint-entry";
+      entry.id = `footprint-${record.id}`;
+      entry.dataset.locationId = record.id;
+      entry.dataset.photoCount = String(record.photos.length);
+
+      const entryHeading = document.createElement("header");
+      entryHeading.className = "footprint-entry-heading";
+
+      const visitedAt = new Date(record.visitedAt);
+      const date = document.createElement("time");
+      date.className = "footprint-date";
+      date.dateTime = record.visitedAt;
+      date.textContent = `${yearFormatter.format(visitedAt)}年${monthFormatter.format(visitedAt)}月${dayFormatter.format(visitedAt)}日 · ${weekdayFormatter.format(visitedAt)}`;
+
+      const place = document.createElement("h3");
+      const placeText = document.createElement("span");
+      placeText.textContent = record.place;
+      place.append(createPinIcon(), placeText);
+
+      entryHeading.append(date, place);
+
+      const photoGrid = document.createElement("div");
+      photoGrid.className = "footprint-photo-grid";
+      photoGrid.id = `footprint-photos-${record.id}`;
+      photoGrid.dataset.layout =
+        record.photos.length === 1
+          ? "single"
+          : record.photos.length === 4
+            ? "quad"
+            : "triple";
+
+      record.photos.forEach((photo, index) => {
+        const link = document.createElement("a");
+        link.className = "footprint-photo";
+        link.hidden =
+          record.photos.length > 6 ? index >= 5 : index >= 6;
+        link.href = photo.original;
+        link.dataset.src = photo.original;
+        link.dataset.lgSize = `${photo.width}-${photo.height}`;
+        if (photo.caption) {
+          link.dataset.subHtml = `<p>${escapeHTML(photo.caption)}</p>`;
+        }
+        link.setAttribute("aria-label", `查看大图：${photo.alt}`);
+
+        const image = document.createElement("img");
+        image.src = photo.thumbnail;
+        image.alt = photo.alt;
+        image.width = photo.width;
+        image.height = photo.height;
+        image.loading = "lazy";
+        image.decoding = "async";
+        image.style.objectPosition = photo.position || "center";
+        link.append(image);
+
+        photoGrid.append(link);
+      });
+
+      entry.append(entryHeading, photoGrid);
+      if (record.photos.length > 6) {
+        const photos = Array.from(
+          photoGrid.querySelectorAll<HTMLAnchorElement>(".footprint-photo")
+        );
+        const hiddenPhotos = photos.slice(5);
+        const previewPhoto = record.photos[5]!;
+        const moreButton = document.createElement("button");
+        moreButton.className = "footprint-photo-more";
+        moreButton.type = "button";
+        moreButton.setAttribute(
+          "aria-label",
+          `展开其余 ${record.photos.length - 6} 张照片`
+        );
+
+        const previewImage = document.createElement("img");
+        previewImage.src = previewPhoto.thumbnail;
+        previewImage.alt = "";
+        previewImage.width = previewPhoto.width;
+        previewImage.height = previewPhoto.height;
+        previewImage.loading = "lazy";
+        previewImage.decoding = "async";
+        previewImage.style.objectPosition = previewPhoto.position || "center";
+
+        const moreCount = document.createElement("span");
+        moreCount.className = "footprint-photo-more-count";
+        moreCount.textContent = `+${record.photos.length - 6}`;
+        moreButton.append(previewImage, moreCount);
+        photoGrid.append(moreButton);
+        moreButton.addEventListener("click", () => {
+          hiddenPhotos.forEach(photo => {
+            photo.hidden = false;
+          });
+          moreButton.remove();
+        });
+      }
+      if (record.note) {
+        const note = document.createElement("p");
+        note.className = "footprint-note";
+        note.textContent = record.note;
+        entry.append(note);
+      }
+      return entry;
+    };
+
+    const destroyGalleries = () => {
+      galleryInstances.forEach(instance => instance.destroy());
+      galleryInstances = [];
+    };
+
+    const refreshGallery = async () => {
+      if (!gallery.querySelector(".footprint-photo")) return;
+
+      try {
+        const [{ default: lightGallery }, { default: lgZoom }] =
+          await Promise.all([
+            import("lightgallery"),
+            import("lightgallery/plugins/zoom"),
+          ]);
+        destroyGalleries();
+        galleryInstances = Array.from(
+          gallery.querySelectorAll<HTMLElement>(".footprint-entry")
+        )
+          .filter(entry => entry.querySelector(".footprint-photo"))
+          .map(entry =>
+            lightGallery(entry, {
+              plugins: [lgZoom],
+              selector: ".footprint-photo",
+              speed: 350,
+              download: false,
+              counter: true,
+              getCaptionFromTitleOrAlt: false,
+              actualSize: false,
+            })
+          );
+      } catch {
+        // 加载失败时图片链接仍可直接打开原图。
+      }
+    };
+
+    const loadNextPage = async (version = selectionVersion) => {
+      if (
+        isLoading ||
+        version !== selectionVersion ||
+        loadedCount >= activeIds.length
+      ) {
+        return;
+      }
+
+      const pageIds = activeIds.slice(loadedCount, loadedCount + PAGE_SIZE);
+      isLoading = true;
+      empty.hidden = true;
+      loadMoreButton.disabled = true;
+      loadMoreButton.textContent = "正在加载…";
+
+      try {
+        const records = await Promise.all(
+          pageIds.map(async id => {
+            const response = await fetch(
+              `/api/footprints/${encodeURIComponent(id)}.json`,
+              { cache: "force-cache" }
+            );
+            if (!response.ok) {
+              throw new Error(`Failed to load footprint ${id}`);
+            }
+            return (await response.json()) as FootprintRecord;
+          })
+        );
+
+        if (version !== selectionVersion) return;
+        gallery.append(...records.map(renderFootprintEntry));
+        loadedCount += pageIds.length;
+        empty.hidden = gallery.childElementCount > 0;
+        loadMoreButton.hidden = loadedCount >= activeIds.length;
+        await refreshGallery();
+      } catch {
+        if (version !== selectionVersion) return;
+        empty.textContent = "记录加载失败，请稍后再试。";
+        empty.hidden = false;
+      } finally {
+        if (version === selectionVersion) {
+          isLoading = false;
+          loadMoreButton.disabled = false;
+          loadMoreButton.textContent = "加载更多";
+        }
+      }
+    };
+
+    const selectFootprints = (locationIds?: string[]) => {
+      selectionVersion += 1;
+      isLoading = false;
+      loadedCount = 0;
+      activeIds = locationIds
+        ? [...new Set(locationIds)]
+            .filter(id => locationById.has(id))
+            .sort(
+              (a, b) =>
+                (locationById.get(a)?.index ?? 0) -
+                (locationById.get(b)?.index ?? 0)
+            )
+        : [];
+
+      const selectedIds = new Set(activeIds);
+      const selectedPhotoCount = activeIds.reduce(
+        (total, id) => total + (locationById.get(id)?.photoCount ?? 0),
+        0
+      );
+
+      destroyGalleries();
+      gallery.replaceChildren();
+      if (activeIds.length) {
+        if (panelState === "closed") setPanelState("half");
+        panelBody.scrollTop = 0;
+      } else {
+        setPanelState("closed");
+      }
+      markers.forEach((marker, id) => {
+        marker
+          .getElement()
+          ?.querySelector(".photo-map-marker")
+          ?.classList.toggle("is-selected", selectedIds.has(id));
+      });
+
+      heading.textContent = activeIds.length
+        ? `当前标记 · ${selectedPhotoCount} 张照片`
+        : "当前标记";
+      empty.textContent = activeIds.length
+        ? "正在加载照片记录…"
+        : "点击地图上的照片标记查看记录。";
+      empty.hidden = false;
+      loadMoreButton.hidden = true;
+
+      if (activeIds.length) void loadNextPage(selectionVersion);
+    };
+
+    const resetMapView = (animate = true) => {
+      map.stop();
+
+      if (bounds.length > 1) {
+        const options = { padding: [48, 48] as L.PointTuple, maxZoom: 4 };
+        if (animate) {
+          map.flyToBounds(bounds, { ...options, duration: 0.8 });
+        } else {
+          map.fitBounds(bounds, options);
+        }
+      } else if (bounds.length === 1) {
+        if (animate) {
+          map.flyTo(bounds[0], 10, { duration: 0.8 });
+        } else {
+          map.setView(bounds[0], 10);
+        }
+      } else if (animate) {
+        map.flyTo([35.8617, 104.1954], 4, { duration: 0.8 });
+      } else {
+        map.setView([35.8617, 104.1954], 4);
+      }
+    };
+
+    for (const [locationIndex, location] of locations.entries()) {
+      const icon = L.divIcon({
+        className: "footprint-map-icon",
+        html: createPhotoMarkerContent(location.cover, location.photoCount),
+        iconSize: [44, 51],
+        iconAnchor: [22, 50],
+      });
+
+      const marker = L.marker(
+        [location.coordinates.lat, location.coordinates.lng],
+        {
+          icon,
+          title: `${new Date(location.visitedAt).toLocaleDateString("zh-CN", {
+            timeZone: timezone,
+          })}，${location.photoCount} 张照片`,
+          keyboard: false,
+          interactive: true,
+          pane: "footprint-point-pane",
+          riseOnHover: true,
+          zIndexOffset: (locations.length - locationIndex) * 1000,
+        }
+      );
+
+      marker.on("click", () => {
+        selectFootprints([location.id]);
+        const markerBounds = L.latLngBounds([
+          [location.coordinates.lat, location.coordinates.lng],
+          [location.coordinates.lat, location.coordinates.lng],
+        ]);
+        map.flyToBounds(markerBounds, {
+          ...getPanelAwarePadding(),
+          maxZoom: Math.max(map.getZoom(), 10),
+          duration: 0.65,
+        });
+      });
+      markerVisualData.set(marker, {
+        id: location.id,
+        cover: location.cover,
+        photoCount: location.photoCount,
+      });
+      markerClusters.addLayer(marker);
+      markers.set(location.id, marker);
+      bounds.push([location.coordinates.lat, location.coordinates.lng]);
+    }
+
+    markerClusters.on("clusterclick", event => {
+      const cluster = (event as unknown as { layer: L.MarkerCluster }).layer;
+      const selectedIds = cluster
+        .getAllChildMarkers()
+        .map((marker: L.Marker) => markerVisualData.get(marker)?.id)
+        .filter((id: string | undefined): id is string => Boolean(id));
+      selectFootprints(selectedIds);
+
+      if (map.getZoom() >= map.getMaxZoom()) {
+        cluster.spiderfy();
+      } else {
+        map.flyToBounds(cluster.getBounds(), {
+          ...getPanelAwarePadding(),
+          maxZoom: map.getMaxZoom(),
+          duration: 0.65,
+        });
+      }
+    });
+
+    resetMapView(false);
+
+    const zoomControl = mapZoomControl.getContainer();
+    if (zoomControl) {
+      const createControlIcon = (pathData: string) => {
+        const icon = document.createElementNS(
+          "http://www.w3.org/2000/svg",
+          "svg"
+        );
+        icon.setAttribute("viewBox", "0 0 24 24");
+        icon.setAttribute("aria-hidden", "true");
+        const path = document.createElementNS(
+          "http://www.w3.org/2000/svg",
+          "path"
+        );
+        path.setAttribute("d", pathData);
+        icon.append(path);
+        return icon;
+      };
+      const resetButton = document.createElement("a");
+      resetButton.className = "leaflet-control-initial-view";
+      resetButton.href = "#";
+      resetButton.title = "恢复初始视图";
+      resetButton.setAttribute("role", "button");
+      resetButton.setAttribute("aria-label", "恢复初始视图");
+      resetButton.append(
+        createControlIcon("M4 10.5 12 4l8 6.5M6.5 9v10h11V9M9.5 19v-6h5v6")
+      );
+      resetButton.addEventListener("click", event => {
+        event.preventDefault();
+        event.stopPropagation();
+        selectFootprints();
+        resetMapView();
+      });
+      zoomControl.insertBefore(resetButton, zoomControl.firstChild);
+
+      zoomControl
+        .querySelector(".leaflet-control-zoom-in")
+        ?.replaceChildren(createControlIcon("M12 5v14M5 12h14"));
+      zoomControl
+        .querySelector(".leaflet-control-zoom-out")
+        ?.replaceChildren(createControlIcon("M5 12h14"));
+    }
+
+    loadMoreButton.addEventListener("click", () => {
+      void loadNextPage();
+    });
+    panelExpandButton.addEventListener("click", () => {
+      setPanelState(panelState === "expanded" ? "half" : "expanded");
+    });
+    panelCloseButton.addEventListener("click", () => {
+      selectFootprints();
+    });
+    document.addEventListener("keydown", event => {
+      if (
+        event.key === "Escape" &&
+        panel.isConnected &&
+        panelState !== "closed"
+      ) {
+        selectFootprints();
+      }
+    });
+    document.addEventListener(
+      "astro:before-swap",
+      () => {
+        window.removeEventListener("resize", updateMapViewportHeight);
+        overviewResizeObserver.disconnect();
+        panelResizeObserver.disconnect();
+      },
+      { once: true }
+    );
+  };
+
+  initializeFootprints();
+  document.addEventListener("astro:page-load", initializeFootprints);
+</script>
+
+<style is:global>
+  .footprints-page {
+    --footprint-gap: 0.35rem;
+  }
+
+  .footprints-overview {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 1.25rem;
+  }
+
+  .footprints-tagline {
+    align-self: flex-end;
+    margin: 0 0 0.2rem;
+    color: color-mix(in srgb, var(--foreground) 48%, transparent);
+    font-size: 0.72rem;
+    font-style: normal;
+    line-height: 1.4;
+    white-space: nowrap;
+  }
+
+  .footprints-map-shell {
+    position: relative;
+    overflow: clip;
+    border-radius: 1.25rem;
+  }
+
+  .footprints-map-shell {
+    width: 100%;
+    max-width: none;
+    margin-left: 0;
+    padding-inline: 0;
+  }
+
+  .footprints-map {
+    z-index: 1;
+    width: 100%;
+    height: var(--footprints-map-height, calc(100svh - 12rem));
+    min-height: 0;
+    overflow: hidden;
+    border: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+    border-radius: 1.25rem;
+    background: color-mix(in srgb, var(--foreground) 8%, var(--background));
+  }
+
+  .footprints-map .leaflet-control-attribution {
+    padding: 1px 5px;
+    border-radius: 0.35rem 0 0;
+    background: rgb(255 255 255 / 82%);
+    font-size: 0.6rem;
+    line-height: 1.35;
+    backdrop-filter: blur(0.3rem);
+  }
+
+  .footprints-map .leaflet-control-zoom {
+    display: flex;
+  }
+
+  .footprints-map .leaflet-control-zoom a {
+    display: grid;
+    place-items: center;
+    border-right: 1px solid #ccc;
+    border-bottom: 0;
+    border-radius: 0 !important;
+  }
+
+  .footprints-map .leaflet-control-zoom a:first-child {
+    border-radius: 4px 0 0 4px !important;
+  }
+
+  .footprints-map .leaflet-control-zoom a:last-child {
+    border-right: 0;
+    border-radius: 0 4px 4px 0 !important;
+  }
+
+  .footprints-map .leaflet-control-zoom svg {
+    width: 16px;
+    height: 16px;
+    fill: none;
+    stroke: currentColor;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 1.8;
+  }
+
+  .footprints-map .leaflet-left,
+  .footprints-map .leaflet-right,
+  .footprints-map .leaflet-bottom {
+    transition:
+      inset 200ms ease,
+      right 200ms ease,
+      bottom 200ms ease;
+  }
+
+  .footprints-map-shell.is-panel-open .footprints-map .leaflet-right {
+    right: calc(var(--footprints-panel-width, 0px) + 1.25rem);
+  }
+
+  html[data-theme="light"] .footprints-map .leaflet-tile-pane {
+    filter: saturate(0.78) brightness(1.03) contrast(0.9);
+  }
+
+  html[data-theme="dark"] .footprints-map .leaflet-tile-pane {
+    filter: invert(0.76) sepia(0.16) saturate(1.25) hue-rotate(165deg)
+      brightness(0.96) contrast(1.12);
+  }
+
+  html[data-theme="dark"] .footprints-map .leaflet-bar a {
+    border-color: #3d4148;
+    background: #24272c;
+    color: #f2f4f7;
+  }
+
+  html[data-theme="dark"] .footprints-map .leaflet-bar a:hover,
+  html[data-theme="dark"] .footprints-map .leaflet-bar a:focus {
+    background: #30343a;
+    color: #fff;
+  }
+
+  html[data-theme="dark"] .footprints-map .leaflet-control-attribution {
+    background: rgb(36 39 44 / 88%);
+    color: #c7cbd1;
+  }
+
+  html[data-theme="dark"] .footprints-map .leaflet-control-attribution a {
+    color: #d9e8ff;
+  }
+
+  .footprint-map-icon {
+    border: 0 !important;
+    background: transparent !important;
+  }
+
+  .photo-map-marker {
+    --marker-frame: #fff;
+    --marker-badge: #006658;
+    --marker-badge-text: #fff;
+
+    position: relative;
+    isolation: isolate;
+    box-sizing: border-box;
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    border: 1px solid var(--marker-frame);
+    border-radius: 8px;
+    background: var(--marker-frame);
+    box-shadow:
+      0 0.45rem 1rem color-mix(in srgb, var(--foreground) 26%, transparent),
+      0 0 0 1px color-mix(in srgb, var(--foreground) 12%, transparent);
+    transition:
+      transform 180ms ease,
+      box-shadow 180ms ease;
+  }
+
+  .photo-map-marker::after {
+    position: absolute;
+    z-index: -1;
+    bottom: -3px;
+    left: 50%;
+    width: 8px;
+    height: 8px;
+    transform: translateX(-50%) rotate(45deg);
+    border-right: 1px solid var(--marker-frame);
+    border-bottom: 1px solid var(--marker-frame);
+    background: var(--marker-frame);
+    content: "";
+  }
+
+  .photo-map-marker img {
+    position: absolute;
+    z-index: 0;
+    top: 1px;
+    left: 1px;
+    display: block;
+    width: 40px !important;
+    max-width: 40px !important;
+    height: 40px !important;
+    max-height: 40px !important;
+    border-radius: 6px;
+    object-fit: cover;
+  }
+
+  .photo-map-marker span {
+    position: absolute;
+    top: 0;
+    right: 0;
+    z-index: 1;
+    display: grid;
+    min-width: 1.2rem;
+    height: 1.2rem;
+    place-items: center;
+    padding: 0 0.22rem;
+    border: 1px solid var(--marker-frame);
+    border-radius: 999px;
+    background: var(--marker-badge);
+    box-shadow: 0 2px 5px rgb(0 0 0 / 35%);
+    transform: translate(50%, -50%);
+    color: var(--marker-badge-text);
+    font-size: 0.62rem;
+    font-weight: 700;
+  }
+
+  html[data-theme="dark"] .photo-map-marker {
+    --marker-frame: #272a2f;
+    --marker-badge: #00645b;
+
+    box-shadow:
+      0 0.35rem 0.8rem rgb(0 0 0 / 24%),
+      0 0 0 1px var(--marker-frame / 25%),
+      0 0 0.2rem rgb(255 255 255 / 5%);
+  }
+
+  .leaflet-marker-icon:focus .photo-map-marker,
+  .photo-map-marker.is-selected {
+    transform: translateY(-3px) scale(1.08);
+    box-shadow:
+      0 0 0 4px color-mix(in srgb, var(--accent) 24%, transparent),
+      0 0.55rem 1.3rem color-mix(in srgb, var(--foreground) 32%, transparent);
+  }
+
+  .footprint-results-panel {
+    position: absolute;
+    z-index: 1100;
+    top: 0.75rem;
+    right: 0.75rem;
+    bottom: 0.75rem;
+    display: flex;
+    width: min(20rem, 42%);
+    min-width: 0;
+    flex-direction: column;
+    overflow: hidden;
+    border: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
+    border-radius: 1rem;
+    background: color-mix(
+      in srgb,
+      var(--background) 96%,
+      var(--foreground) 4%
+    );
+    box-shadow: 0 1rem 2.5rem rgb(0 0 0 / 18%);
+    opacity: 0;
+    pointer-events: none;
+    transform: translateX(calc(100% + 1.5rem));
+    visibility: hidden;
+    transition:
+      transform 220ms ease,
+      opacity 180ms ease,
+      visibility 0s linear 220ms;
+  }
+
+  .footprint-results-panel[data-state="half"],
+  .footprint-results-panel[data-state="expanded"] {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translateX(0);
+    visibility: visible;
+    transition-delay: 0s;
+  }
+
+  .footprint-results-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex: 0 0 auto;
+    gap: 0.65rem;
+    padding: 0.75rem 0.8rem 0.7rem;
+    border-bottom: 1px solid color-mix(in srgb, var(--border) 68%, transparent);
+  }
+
+  .footprint-results-header h2 {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    margin: 0;
+    min-width: 0;
+    font-size: 0.88rem;
+    font-weight: 600;
+  }
+
+  .footprint-results-header h2 > span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .footprint-results-header h2 svg,
+  .footprint-entry-heading h3 svg {
+    width: 1.1rem;
+    flex: 0 0 auto;
+    fill: none;
+    stroke: currentColor;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 1.7;
+  }
+
+  .footprint-results-actions {
+    display: flex;
+    flex: 0 0 auto;
+    gap: 0.25rem;
+  }
+
+  .footprint-results-actions button {
+    display: grid;
+    width: 1.8rem;
+    height: 1.8rem;
+    place-items: center;
+    padding: 0;
+    border: 1px solid transparent;
+    border-radius: 0.5rem;
+    background: transparent;
+    color: color-mix(in srgb, var(--foreground) 66%, transparent);
+  }
+
+  .footprint-results-actions button:hover,
+  .footprint-results-actions button:focus-visible {
+    border-color: color-mix(in srgb, var(--border) 72%, transparent);
+    background: color-mix(in srgb, var(--foreground) 7%, transparent);
+    color: var(--foreground);
+  }
+
+  .footprint-results-actions svg {
+    width: 1rem;
+    height: 1rem;
+    fill: none;
+    stroke: currentColor;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 1.8;
+    transition: transform 180ms ease;
+  }
+
+  #footprints-panel-expand {
+    display: none;
+  }
+
+  .footprint-results-panel[data-state="expanded"]
+    #footprints-panel-expand
+    svg {
+    transform: rotate(180deg);
+  }
+
+  .footprint-results-body {
+    min-height: 0;
+    flex: 1 1 auto;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 0.8rem;
+    scrollbar-gutter: stable;
+  }
+
+  #footprint-gallery {
+    display: grid;
+    gap: 1.35rem;
+  }
+
+  .footprint-entry {
+    min-width: 0;
+    container-type: inline-size;
+  }
+
+  .footprint-entry[hidden] {
+    display: none;
+  }
+
+  .footprint-date {
+    color: color-mix(in srgb, var(--foreground) 58%, transparent);
+    font-size: 0.76rem;
+    line-height: 1.35;
+    white-space: nowrap;
+  }
+
+  .footprint-entry-heading {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 0.55rem;
+    margin-bottom: 0.55rem;
+  }
+
+  .footprint-entry-heading h3 {
+    display: flex;
+    grid-column: 2;
+    grid-row: 1;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.35rem;
+    margin: 0;
+    min-width: 0;
+    color: color-mix(in srgb, var(--foreground) 88%, transparent);
+    font-size: 0.74rem;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+
+  .footprint-entry-heading h3 svg {
+    width: 0.88rem;
+    height: 0.88rem;
+    color: color-mix(in srgb, var(--accent) 72%, var(--foreground));
+    stroke-width: 1.6;
+  }
+
+  .footprint-entry-heading h3 span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .footprint-photo-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    width: 100%;
+    gap: 3px;
+    overflow: hidden;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+  }
+
+  .footprint-photo-grid[data-layout="single"] {
+    display: block;
+  }
+
+  .footprint-photo-grid[data-layout="quad"] {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: calc((100% - 3px) * 2 / 3 + 3px);
+  }
+
+  .footprint-photo {
+    position: relative;
+    display: block;
+    width: 100%;
+    aspect-ratio: 1;
+    overflow: hidden;
+    border: 0;
+    border-radius: 0;
+    background: color-mix(in srgb, var(--foreground) 9%, transparent);
+    box-shadow: none;
+  }
+
+  .footprint-photo[hidden] {
+    display: none;
+  }
+
+  .footprint-photo-more {
+    position: relative;
+    display: block;
+    width: 100%;
+    padding: 0;
+    aspect-ratio: 1;
+    overflow: hidden;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    cursor: pointer;
+  }
+
+  .footprint-photo-grid[data-layout="single"] .footprint-photo {
+    display: inline-block;
+    width: auto;
+    height: auto;
+    aspect-ratio: auto;
+    vertical-align: top;
+  }
+
+  .footprint-photo img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: filter 180ms ease;
+  }
+
+  .footprint-photo-more img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .footprint-photo-grid[data-layout="single"] .footprint-photo img {
+    width: auto;
+    height: auto;
+    max-width: 100%;
+    max-height: calc(66.667cqw - 1px);
+    object-fit: contain;
+  }
+
+  .footprint-photo-more-count {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    background: rgb(0 0 0 / 48%);
+    color: #fff;
+    font-size: 1.25rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    text-shadow: 0 1px 2px rgb(0 0 0 / 35%);
+  }
+
+  .lg-backdrop {
+    z-index: 2100 !important;
+  }
+
+  .lg-outer {
+    z-index: 2110 !important;
+  }
+
+  .footprint-photo:hover img {
+    filter: brightness(1.045);
+  }
+
+  .footprint-note {
+    margin: 0.55rem 0 0;
+    color: color-mix(in srgb, var(--foreground) 58%, transparent);
+    font-size: 0.76rem;
+    line-height: 1.55;
+  }
+
+  .footprints-empty {
+    padding: 2.5rem 0;
+    color: color-mix(in srgb, var(--foreground) 54%, transparent);
+    text-align: center;
+  }
+
+  #footprints-load-more {
+    display: block;
+    margin: 1.25rem auto 0;
+    padding: 0.55rem 1rem;
+    border: 1px solid color-mix(in srgb, var(--border) 76%, transparent);
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--foreground) 5%, transparent);
+    color: var(--foreground);
+    font-size: 0.82rem;
+    transition:
+      border-color 160ms ease,
+      background 160ms ease;
+  }
+
+  #footprints-load-more:hover:not(:disabled) {
+    border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
+    background: color-mix(in srgb, var(--accent) 10%, transparent);
+  }
+
+  #footprints-load-more:disabled {
+    cursor: wait;
+    opacity: 0.58;
+  }
+
+  #footprints-load-more[hidden] {
+    display: none;
+  }
+
+  @media (max-width: 768px) {
+    .footprints-overview {
+      align-items: flex-start;
+    }
+
+    .footprint-results-panel {
+      top: auto;
+      right: 0.5rem;
+      bottom: 0.5rem;
+      left: 0.5rem;
+      width: auto;
+      height: min(50%, 22rem);
+      border-radius: 1rem;
+      transform: translateY(calc(100% + 1rem));
+    }
+
+    .footprint-results-panel[data-state="half"],
+    .footprint-results-panel[data-state="expanded"] {
+      transform: translateY(0);
+    }
+
+    .footprint-results-panel[data-state="expanded"] {
+      height: calc(100% - 4.25rem);
+    }
+
+    .footprint-results-header {
+      padding: 0.65rem 0.7rem;
+    }
+
+    #footprints-panel-expand {
+      display: grid;
+    }
+
+    .footprint-results-body {
+      padding: 0.7rem;
+    }
+
+    .footprints-map-shell.is-panel-open .footprints-map .leaflet-right {
+      right: 0;
+    }
+
+    .footprints-map-shell.is-panel-open .footprints-map .leaflet-bottom {
+      top: 0.5rem;
+      bottom: auto;
+    }
+
+    .footprints-map-shell.is-panel-open
+      .footprints-map
+      .leaflet-bottom
+      .leaflet-control {
+      margin-top: 0;
+      margin-bottom: 0;
+    }
+
+    .footprint-entry-heading {
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 0.5rem;
+    }
+
+  }
+
+  @media (max-width: 420px) {
+    .footprints-overview {
+      flex-direction: column;
+      gap: 0.25rem;
+    }
+
+    .footprints-tagline {
+      align-self: flex-start;
+      margin-bottom: 0;
+    }
+
+    .footprint-photo-grid {
+      gap: 2px;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .photo-map-marker,
+    .footprint-results-panel,
+    .footprint-results-actions svg,
+    .footprints-map .leaflet-left,
+    .footprints-map .leaflet-right,
+    .footprints-map .leaflet-bottom,
+    .footprint-photo img {
+      transition: none;
+    }
+  }
+</style>

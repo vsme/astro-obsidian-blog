@@ -126,6 +126,7 @@ const DiaryTimeline: React.FC<DiaryTimelineProps> = ({
   );
   const [activeJumpTarget, setActiveJumpTarget] = useState<string | null>(null);
   const [isPeriodMenuOpen, setIsPeriodMenuOpen] = useState(false);
+  const [toolbarPinned, setToolbarPinned] = useState(false);
 
   const isLoadingRef = useRef(false);
   const loadingCountRef = useRef(0);
@@ -140,10 +141,35 @@ const DiaryTimeline: React.FC<DiaryTimelineProps> = ({
   const filterIndicatorRef = useRef<HTMLSpanElement>(null);
   const periodPickerRef = useRef<HTMLDivElement>(null);
   const periodTriggerRef = useRef<HTMLButtonElement>(null);
+  const toolbarRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     isLoadingRef.current = isLoading;
   }, [isLoading]);
+
+  useEffect(() => {
+    let frame: number | null = null;
+    const updatePinnedState = () => {
+      frame = null;
+      const toolbar = toolbarRef.current;
+      if (!toolbar) return;
+      const stickyTop = Number.parseFloat(getComputedStyle(toolbar).top);
+      setToolbarPinned(toolbar.getBoundingClientRect().top <= stickyTop + 1);
+    };
+    const scheduleUpdate = () => {
+      if (frame !== null) return;
+      frame = requestAnimationFrame(updatePinnedState);
+    };
+
+    updatePinnedState();
+    window.addEventListener("scroll", scheduleUpdate, { passive: true });
+    window.addEventListener("resize", scheduleUpdate);
+    return () => {
+      window.removeEventListener("scroll", scheduleUpdate);
+      window.removeEventListener("resize", scheduleUpdate);
+      if (frame !== null) cancelAnimationFrame(frame);
+    };
+  }, []);
 
   const startLoading = useCallback(() => {
     loadingCountRef.current += 1;
@@ -326,7 +352,7 @@ const DiaryTimeline: React.FC<DiaryTimelineProps> = ({
   );
 
   const isToolbarPinned = useCallback(() => {
-    const toolbar = document.querySelector<HTMLElement>(".diary-toolbar");
+    const toolbar = toolbarRef.current;
     if (!toolbar) return false;
 
     const stickyTop = Number.parseFloat(getComputedStyle(toolbar).top);
@@ -538,7 +564,11 @@ const DiaryTimeline: React.FC<DiaryTimelineProps> = ({
 
   return (
     <div className="diary-timeline-experience">
-      <div className="diary-toolbar">
+      <div
+        ref={toolbarRef}
+        className="diary-toolbar"
+        data-pinned={toolbarPinned ? "true" : "false"}
+      >
         <section
           className="diary-filter-panel"
           aria-labelledby="diary-filter-heading"
@@ -669,10 +699,7 @@ const DiaryTimeline: React.FC<DiaryTimelineProps> = ({
             tabIndex={0}
             className={`time-river-entry ${activeJumpTarget === entry.date ? "is-time-jump-target" : ""} diary-feed-entry focus:ring-skin-accent focus:ring-offset-skin-fill rounded-lg focus:outline-none`}
           >
-            <DiaryEntryReact
-              date={entry.date}
-              timeBlocks={entry.timeBlocks}
-            />
+            <DiaryEntryReact date={entry.date} timeBlocks={entry.timeBlocks} />
           </article>
         ))}
 

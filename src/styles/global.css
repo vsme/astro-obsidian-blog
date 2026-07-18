@@ -136,23 +136,27 @@ html[data-theme="dark"] {
   margin-top: -4rem;
   margin-bottom: 3rem;
   padding-block: 0.45rem;
-  background: color-mix(in srgb, var(--background) 92%, transparent);
-  backdrop-filter: blur(1rem) saturate(140%);
+  background: transparent;
+  isolation: isolate;
 }
 
-.diary-toolbar::after {
+.diary-toolbar::before {
   position: absolute;
-  top: 100%;
-  right: 0;
-  left: 0;
-  height: 1.4rem;
-  background: linear-gradient(
-    to bottom,
-    color-mix(in srgb, var(--background) 68%, transparent),
-    transparent
-  );
-  pointer-events: none;
+  z-index: -1;
+  inset-block: 0;
+  left: 50%;
+  width: 100vw;
+  background: transparent;
   content: "";
+  pointer-events: none;
+  transform: translateX(-50%);
+  transition: background-color 180ms ease;
+}
+
+.diary-toolbar[data-pinned="true"]::before {
+  background: color-mix(in srgb, var(--background) 90%, transparent);
+  -webkit-backdrop-filter: blur(16px) saturate(1.08);
+  backdrop-filter: blur(16px) saturate(1.08);
 }
 
 #diary-feed {
@@ -195,18 +199,24 @@ html[data-theme="dark"] {
 .diary-filter-options {
   position: relative;
   display: flex;
-  flex-wrap: wrap;
-  gap: 0.15rem;
+  flex-wrap: nowrap;
+  gap: 0.2rem;
+  padding: 0.2rem;
+  border: 1px solid color-mix(in srgb, var(--foreground) 11%, transparent);
+  border-radius: 0.65rem;
+  background: color-mix(in srgb, var(--background) 96%, var(--foreground) 4%);
 }
 
 .diary-filter-active-indicator {
   position: absolute;
-  top: 0;
-  bottom: 0;
+  z-index: 0;
+  top: 0.2rem;
+  bottom: 0.2rem;
   left: 0;
   width: 0;
-  border-radius: 0.35rem;
-  background: color-mix(in srgb, var(--accent) 9%, transparent);
+  border-radius: 0.48rem;
+  background: var(--background);
+  box-shadow: 0 1px 5px color-mix(in srgb, var(--foreground) 12%, transparent);
   opacity: 0;
   pointer-events: none;
   transform: translate3d(0, 0, 0);
@@ -214,33 +224,35 @@ html[data-theme="dark"] {
     width 280ms cubic-bezier(0.22, 1, 0.36, 1),
     opacity 120ms ease,
     transform 280ms cubic-bezier(0.22, 1, 0.36, 1);
-  view-transition-name: diary-filter-slider;
+  view-transition-name: none;
   will-change: width, transform;
 }
 
 .diary-filter-options button {
   position: relative;
   z-index: 1;
-  padding: 0.22rem 0.35rem;
+  padding: 0.38rem 0.8rem;
   border: 0;
-  border-radius: 0.35rem;
+  border-radius: 0.48rem;
   background: transparent;
-  color: color-mix(in srgb, var(--foreground) 50%, transparent);
+  color: color-mix(in srgb, var(--foreground) 52%, transparent);
   font-family: ui-sans-serif, system-ui, sans-serif;
-  font-size: 0.72rem;
-  line-height: 1.45;
+  font-size: 0.74rem;
+  font-weight: 600;
+  line-height: 1.35;
   transition:
     background-color 160ms ease,
     color 160ms ease;
 }
 
 .diary-filter-options button:hover {
-  color: var(--accent);
+  color: var(--foreground);
 }
 
-.diary-filter-options button[aria-pressed="true"] {
+.diary-filter-options button[aria-pressed="true"],
+.diary-filter-options button[aria-selected="true"] {
   background: transparent;
-  color: var(--accent);
+  color: var(--foreground);
 }
 
 .diary-filter-options button:disabled {
@@ -288,22 +300,19 @@ html[data-theme="dark"] {
   display: flex;
   gap: 0.42rem;
   align-items: center;
-  padding: 0.25rem 0.35rem;
+  padding: 0.55rem 0.75rem;
   border: 0;
-  border-radius: 0.4rem;
+  border-radius: 0.65rem;
   background: transparent;
   color: color-mix(in srgb, var(--foreground) 58%, transparent);
   font-size: 0.72rem;
   line-height: 1.45;
   white-space: nowrap;
-  transition:
-    background-color 160ms ease,
-    color 160ms ease;
+  transition: color 160ms ease;
 }
 
 .diary-period-trigger:hover,
 .diary-period-trigger[aria-expanded="true"] {
-  background: color-mix(in srgb, var(--accent) 8%, transparent);
   color: var(--accent);
 }
 

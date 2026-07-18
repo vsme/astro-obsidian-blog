@@ -5,11 +5,13 @@ import Layout from "@/layouts/Layout.astro";
 import Header from "@/components/Header.astro";
 import Breadcrumb from "@/components/Breadcrumb.astro";
 import Footer from "@/components/Footer.astro";
+import FootprintTimeline from "@/components/FootprintTimeline";
 import { SITE } from "@/config";
 import "leaflet/dist/leaflet.css";
 import "leaflet.markercluster/dist/MarkerCluster.css";
 import "lightgallery/css/lightgallery.css";
 import "lightgallery/css/lg-zoom.css";
+import "lightgallery/css/lg-thumbnail.css";
 
 const sourceEntries = await getCollection(
   "footprints",
@@ -87,9 +89,45 @@ const mapData = JSON.stringify(locations).replace(/</g, "\\u003c");
       <p class="footprints-tagline">地图标记去向，照片留下当时的光。</p>
     </header>
 
+    <div class="footprints-view-toolbar" data-pinned="false">
+      <div
+        class="footprints-view-switch diary-filter-options"
+        role="tablist"
+        aria-label="足迹展示方式"
+      >
+        <span
+          id="footprints-view-active-indicator"
+          class="diary-filter-active-indicator"
+          aria-hidden="true"></span>
+        <button
+          id="footprints-map-tab"
+          type="button"
+          role="tab"
+          aria-selected="true"
+          aria-controls="footprints-map-view"
+          data-footprints-view="map"
+        >
+          地图
+        </button>
+        <button
+          id="footprints-timeline-tab"
+          type="button"
+          role="tab"
+          aria-selected="false"
+          aria-controls="footprints-timeline"
+          data-footprints-view="timeline"
+          tabindex="-1"
+        >
+          时间线
+        </button>
+      </div>
+    </div>
+
     <section
-      class="footprints-map-shell"
-      aria-labelledby="footprints-map-heading"
+      id="footprints-map-view"
+      class="footprints-map-shell footprints-view-panel"
+      role="tabpanel"
+      aria-labelledby="footprints-map-tab"
     >
       <h2 id="footprints-map-heading" class="sr-only">照片足迹地图</h2>
       <div
@@ -155,6 +193,20 @@ const mapData = JSON.stringify(locations).replace(/</g, "\\u003c");
           </button>
         </div>
       </aside>
+    </section>
+
+    <section
+      id="footprints-timeline"
+      class="footprints-timeline footprints-view-panel"
+      role="tabpanel"
+      aria-labelledby="footprints-timeline-tab"
+      hidden
+    >
+      <FootprintTimeline
+        client:visible
+        locations={locations.map(({ id, visitedAt }) => ({ id, visitedAt }))}
+        timezone={SITE.timezone}
+      />
     </section>
   </main>
 
@@ -267,7 +319,18 @@ const mapData = JSON.stringify(locations).replace(/</g, "\\u003c");
       "#footprints-panel-close"
     );
     const mapShell = mapElement.closest<HTMLElement>(".footprints-map-shell");
-
+    const timelinePanel = document.querySelector<HTMLElement>(
+      "#footprints-timeline"
+    );
+    const viewTabs = Array.from(
+      document.querySelectorAll<HTMLButtonElement>("[data-footprints-view]")
+    );
+    const viewIndicator = document.querySelector<HTMLElement>(
+      "#footprints-view-active-indicator"
+    );
+    const viewToolbar = document.querySelector<HTMLElement>(
+      ".footprints-view-toolbar"
+    );
     if (
       !gallery ||
       !empty ||
@@ -277,10 +340,32 @@ const mapData = JSON.stringify(locations).replace(/</g, "\\u003c");
       !panelBody ||
       !panelExpandButton ||
       !panelCloseButton ||
-      !mapShell
+      !mapShell ||
+      !timelinePanel ||
+      !viewIndicator ||
+      !viewToolbar ||
+      viewTabs.length !== 2
     ) {
       return;
     }
+
+    let toolbarPinnedFrame: number | null = null;
+    const updateToolbarPinnedState = () => {
+      toolbarPinnedFrame = null;
+      const stickyTop = Number.parseFloat(getComputedStyle(viewToolbar).top);
+      viewToolbar.dataset.pinned = String(
+        viewToolbar.getBoundingClientRect().top <= stickyTop + 1
+      );
+    };
+    const scheduleToolbarPinnedUpdate = () => {
+      if (toolbarPinnedFrame !== null) return;
+      toolbarPinnedFrame = requestAnimationFrame(updateToolbarPinnedState);
+    };
+    updateToolbarPinnedState();
+    window.addEventListener("scroll", scheduleToolbarPinnedUpdate, {
+      passive: true,
+    });
+    window.addEventListener("resize", scheduleToolbarPinnedUpdate);
 
     const isLightGalleryTarget = (target: EventTarget | null) =>
       target instanceof Element && target.closest(".lg-outer");
@@ -629,7 +714,7 @@ const mapData = JSON.stringify(locations).replace(/</g, "\\u003c");
       const date = document.createElement("time");
       date.className = "footprint-date";
       date.dateTime = record.visitedAt;
-      date.textContent = `${yearFormatter.format(visitedAt)}年${monthFormatter.format(visitedAt)}月${dayFormatter.format(visitedAt)}日 · ${weekdayFormatter.format(visitedAt)}`;
+      date.textContent = `${yearFormatter.format(visitedAt)}/${monthFormatter.format(visitedAt)}/${dayFormatter.format(visitedAt)} ${weekdayFormatter.format(visitedAt)}`;
 
       const place = document.createElement("h3");
       const placeText = document.createElement("span");
@@ -654,9 +739,7 @@ const mapData = JSON.stringify(locations).replace(/</g, "\\u003c");
         link.href = photo.original;
         link.dataset.src = photo.original;
         link.dataset.lgSize = `${photo.width}-${photo.height}`;
-        if (photo.caption) {
-          link.dataset.subHtml = `<p>${escapeHTML(photo.caption)}</p>`;
-        }
+        link.dataset.subHtml = `<div class="footprint-gallery-caption"><h4>${escapeHTML(photo.alt)}</h4>${photo.caption ? `<p>${escapeHTML(photo.caption)}</p>` : ""}</div>`;
         link.setAttribute("aria-label", `查看大图：${photo.alt}`);
 
         const image = document.createElement("img");
@@ -683,6 +766,8 @@ const mapData = JSON.stringify(locations).replace(/</g, "\\u003c");
           const item = document.createElement("li");
           const link = document.createElement("a");
           link.href = post.href;
+          link.target = "_blank";
+          link.rel = "noopener noreferrer";
           const title = document.createElement("span");
           title.textContent = post.title;
           link.append(
@@ -734,11 +819,15 @@ const mapData = JSON.stringify(locations).replace(/</g, "\\u003c");
       if (!gallery.querySelector(".footprint-photo")) return;
 
       try {
-        const [{ default: lightGallery }, { default: lgZoom }] =
-          await Promise.all([
-            import("lightgallery"),
-            import("lightgallery/plugins/zoom"),
-          ]);
+        const [
+          { default: lightGallery },
+          { default: lgZoom },
+          { default: lgThumbnail },
+        ] = await Promise.all([
+          import("lightgallery"),
+          import("lightgallery/plugins/zoom"),
+          import("lightgallery/plugins/thumbnail"),
+        ]);
         destroyGalleries();
         galleryInstances = Array.from(
           gallery.querySelectorAll<HTMLElement>(".footprint-entry")
@@ -746,13 +835,15 @@ const mapData = JSON.stringify(locations).replace(/</g, "\\u003c");
           .filter(entry => entry.querySelector(".footprint-photo"))
           .map(entry =>
             lightGallery(entry, {
-              plugins: [lgZoom],
+              plugins: [lgZoom, lgThumbnail],
               selector: ".footprint-photo",
               speed: 350,
               download: false,
               counter: true,
               getCaptionFromTitleOrAlt: false,
               actualSize: false,
+              thumbnail: true,
+              animateThumb: true,
             })
           );
       } catch {
@@ -952,6 +1043,76 @@ const mapData = JSON.stringify(locations).replace(/</g, "\\u003c");
 
     resetMapView(false);
 
+    type FootprintsView = "map" | "timeline";
+    const VIEW_STORAGE_KEY = "footprints-preferred-view";
+    const setActiveView = (view: FootprintsView, persist = true) => {
+      const showMap = view === "map";
+      mapShell.hidden = !showMap;
+      mapShell.toggleAttribute("inert", !showMap);
+      timelinePanel.hidden = showMap;
+      timelinePanel.toggleAttribute("inert", showMap);
+
+      viewTabs.forEach(tab => {
+        const isActive = tab.dataset.footprintsView === view;
+        tab.setAttribute("aria-selected", String(isActive));
+        tab.tabIndex = isActive ? 0 : -1;
+        if (isActive) {
+          viewIndicator.style.width = `${tab.offsetWidth}px`;
+          viewIndicator.style.transform = `translate3d(${tab.offsetLeft}px, 0, 0)`;
+          viewIndicator.style.opacity = "1";
+        }
+      });
+
+      if (persist) {
+        try {
+          localStorage.setItem(VIEW_STORAGE_KEY, view);
+        } catch {
+          // 隐私模式下无法持久化时，当前页面内的切换仍然有效。
+        }
+      }
+
+      if (showMap) {
+        requestAnimationFrame(() => {
+          updateMapViewportHeight();
+          map.invalidateSize({ pan: false });
+        });
+      }
+    };
+
+    viewTabs.forEach((tab, index) => {
+      tab.addEventListener("click", () => {
+        setActiveView(tab.dataset.footprintsView as FootprintsView);
+      });
+      tab.addEventListener("keydown", event => {
+        if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) {
+          return;
+        }
+        event.preventDefault();
+        const nextIndex =
+          event.key === "Home"
+            ? 0
+            : event.key === "End"
+              ? viewTabs.length - 1
+              : (index +
+                  (event.key === "ArrowRight" ? 1 : -1) +
+                  viewTabs.length) %
+                viewTabs.length;
+        const nextTab = viewTabs[nextIndex];
+        nextTab.focus();
+        setActiveView(nextTab.dataset.footprintsView as FootprintsView);
+      });
+    });
+
+    let preferredView: FootprintsView = "map";
+    try {
+      if (localStorage.getItem(VIEW_STORAGE_KEY) === "timeline") {
+        preferredView = "timeline";
+      }
+    } catch {
+      // 使用默认地图视图。
+    }
+    setActiveView(preferredView, false);
+
     const zoomControl = mapZoomControl.getContainer();
     if (zoomControl) {
       const createControlIcon = (pathData: string) => {
@@ -1016,6 +1177,11 @@ const mapData = JSON.stringify(locations).replace(/</g, "\\u003c");
       "astro:before-swap",
       () => {
         window.removeEventListener("resize", updateMapViewportHeight);
+        window.removeEventListener("scroll", scheduleToolbarPinnedUpdate);
+        window.removeEventListener("resize", scheduleToolbarPinnedUpdate);
+        if (toolbarPinnedFrame !== null) {
+          cancelAnimationFrame(toolbarPinnedFrame);
+        }
         document.removeEventListener(
           "mousedown",
           blockSecondaryGalleryDrag,
@@ -1041,6 +1207,56 @@ const mapData = JSON.stringify(locations).replace(/</g, "\\u003c");
     --footprint-gap: 0.35rem;
   }
 
+  .lg-outer .lg-thumb-outer {
+    background: color-mix(in srgb, var(--background) 22%, #050708);
+  }
+
+  .lg-outer .lg-thumb-item {
+    border-color: color-mix(in srgb, var(--accent) 16%, rgb(255 255 255 / 16%));
+    border-radius: 0.5rem;
+  }
+
+  .lg-outer .lg-thumb-item.active,
+  .lg-outer .lg-thumb-item:hover {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 32%, transparent);
+  }
+
+  .lg-outer .lg-thumb-item:focus-visible {
+    border-color: var(--accent);
+    outline: 2px solid color-mix(in srgb, var(--accent) 72%, white 12%);
+    outline-offset: 2px;
+  }
+
+  .lg-components > .lg-sub-html {
+    display: flex;
+    min-height: 4rem;
+    align-items: center;
+    justify-content: center;
+    background: #000;
+  }
+
+  .lg-sub-html .footprint-gallery-caption {
+    max-width: min(42rem, calc(100vw - 3rem));
+    margin-inline: auto;
+    text-align: center;
+  }
+
+  .lg-sub-html .footprint-gallery-caption h4 {
+    margin: 0;
+    color: #fff;
+    font-size: 0.88rem;
+    font-weight: 600;
+    line-height: 1.45;
+  }
+
+  .lg-sub-html .footprint-gallery-caption p {
+    margin: 0.25rem 0 0;
+    color: rgb(255 255 255 / 72%);
+    font-size: 0.74rem;
+    line-height: 1.55;
+  }
+
   .footprints-overview {
     display: flex;
     align-items: flex-start;
@@ -1057,6 +1273,51 @@ const mapData = JSON.stringify(locations).replace(/</g, "\\u003c");
     font-style: normal;
     line-height: 1.4;
     white-space: nowrap;
+  }
+
+  .footprints-view-switch {
+    display: inline-flex;
+  }
+
+  .footprints-view-toolbar {
+    position: sticky;
+    top: 4.5rem;
+    z-index: 40;
+    margin-bottom: 0.9rem;
+    padding-block: 0.45rem;
+    isolation: isolate;
+  }
+
+  .footprints-view-toolbar::before {
+    position: absolute;
+    z-index: -1;
+    inset-block: 0;
+    left: 50%;
+    width: 100vw;
+    background: transparent;
+    content: "";
+    pointer-events: none;
+    transform: translateX(-50%);
+    transition: background-color 180ms ease;
+  }
+
+  .footprints-view-toolbar[data-pinned="true"]::before {
+    background: color-mix(in srgb, var(--background) 90%, transparent);
+    -webkit-backdrop-filter: blur(16px) saturate(1.08);
+    backdrop-filter: blur(16px) saturate(1.08);
+  }
+
+  .footprints-view-switch button {
+    width: 4.5rem;
+  }
+
+  .footprints-view-switch button:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+  }
+
+  .footprints-view-panel[hidden] {
+    display: none;
   }
 
   .footprints-map-shell {
@@ -1707,6 +1968,195 @@ const mapData = JSON.stringify(locations).replace(/</g, "\\u003c");
     display: none;
   }
 
+  .footprints-timeline {
+    width: 100%;
+    max-width: none;
+    margin-top: 0;
+    margin-left: 0;
+    padding-inline: 0;
+  }
+
+  .footprints-timeline-status {
+    display: grid;
+    min-height: 12rem;
+    place-items: center;
+    color: color-mix(in srgb, var(--foreground) 55%, transparent);
+  }
+
+  .footprints-timeline,
+  .footprints-timeline-content,
+  .footprints-timeline-list,
+  .footprints-timeline-card {
+    width: 100%;
+  }
+
+  .footprints-timeline-item {
+    display: block;
+    padding-bottom: 1.75rem;
+  }
+
+  .footprints-timeline-card > header time {
+    grid-column: 1;
+    grid-row: 1;
+    align-self: baseline;
+    color: var(--foreground);
+    font-size: 0.82rem;
+    font-weight: 650;
+    letter-spacing: 0.04em;
+    white-space: nowrap;
+  }
+
+  .footprints-timeline-card > header {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: baseline;
+    column-gap: 0.9rem;
+  }
+
+  .footprints-timeline-card > header p {
+    grid-column: 2;
+    grid-row: 1;
+    min-width: 0;
+    justify-self: start;
+    margin: 0;
+    overflow: hidden;
+    padding: 0;
+    color: color-mix(in srgb, var(--foreground) 48%, transparent);
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-align: left;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .footprints-timeline-card > header + .footprints-timeline-photos {
+    margin-top: 0.5rem;
+  }
+
+  .footprints-timeline-photos {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 0.28rem;
+    width: 100%;
+  }
+
+  .footprints-timeline-photos a {
+    position: relative;
+    overflow: hidden;
+    aspect-ratio: 1;
+    border-radius: 0.65rem;
+    background: color-mix(in srgb, var(--foreground) 7%, var(--background));
+  }
+
+  .footprints-timeline-photos img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform 280ms ease;
+  }
+
+  .footprints-timeline-photos a:hover img {
+    transform: scale(1.025);
+  }
+
+  .footprints-timeline-photos a span {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    display: -webkit-box;
+    overflow: hidden;
+    padding: 1.2rem 0.5rem 0.35rem;
+    background: linear-gradient(transparent, rgb(0 0 0 / 58%));
+    color: white;
+    font-size: 0.6rem;
+    line-height: 1.35;
+    text-overflow: ellipsis;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+
+  .footprints-timeline-note {
+    margin: 0.6rem 0 0;
+    color: color-mix(in srgb, var(--foreground) 72%, transparent);
+    font-size: 0.86rem;
+    line-height: 1.7;
+  }
+
+  .footprints-timeline-related {
+    display: flex;
+    width: 100%;
+    flex-wrap: wrap;
+    gap: 0.25rem 1rem;
+    margin-top: 0.5rem;
+  }
+
+  .footprints-timeline-related a {
+    display: inline-flex;
+    min-width: 0;
+    align-items: center;
+    gap: 0.35rem;
+    color: color-mix(in srgb, var(--foreground) 76%, transparent);
+    font-size: 0.72rem;
+    line-height: 1.5;
+    text-decoration-color: transparent;
+    text-underline-offset: 0.18rem;
+  }
+
+  .footprints-timeline-related a:hover,
+  .footprints-timeline-related a:focus-visible {
+    color: var(--foreground);
+    text-decoration: underline;
+    text-decoration-color: color-mix(in srgb, var(--accent) 70%, transparent);
+  }
+
+  .footprints-timeline-related a svg {
+    width: 0.85rem;
+    height: 0.85rem;
+    flex: 0 0 auto;
+    fill: none;
+    stroke: color-mix(in srgb, var(--foreground) 48%, transparent);
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 1.7;
+  }
+
+  .footprints-timeline-related a:hover svg,
+  .footprints-timeline-related a:focus-visible svg {
+    stroke: var(--accent);
+  }
+
+  .footprints-timeline-related-arrow {
+    color: var(--accent);
+    font-size: 0.66rem;
+    line-height: 1;
+  }
+
+  .footprints-pagination {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+    padding-top: 0.5rem;
+  }
+
+  .footprints-pagination button {
+    padding: 0.52rem 0.85rem;
+    border: 1px solid color-mix(in srgb, var(--foreground) 16%, transparent);
+    border-radius: 0.55rem;
+    background: color-mix(in srgb, var(--foreground) 4%, var(--background));
+    font-size: 0.76rem;
+  }
+
+  .footprints-pagination button:disabled {
+    opacity: 0.38;
+  }
+
+  .footprints-pagination span {
+    color: color-mix(in srgb, var(--foreground) 56%, transparent);
+    font-size: 0.73rem;
+  }
+
   @media (max-width: 768px) {
     .footprints-overview {
       align-items: flex-start;
@@ -1750,6 +2200,10 @@ const mapData = JSON.stringify(locations).replace(/</g, "\\u003c");
       grid-template-columns: minmax(0, 1fr) auto;
       gap: 0.5rem;
     }
+
+    .footprints-timeline-photos {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
   }
 
   @media (max-width: 420px) {
@@ -1765,6 +2219,29 @@ const mapData = JSON.stringify(locations).replace(/</g, "\\u003c");
 
     .footprint-photo-grid {
       gap: 2px;
+    }
+
+    .footprints-timeline-heading {
+      align-items: flex-start;
+      flex-direction: column;
+      gap: 0.4rem;
+    }
+
+    .footprints-timeline-item {
+      padding-bottom: 1.5rem;
+    }
+
+    .footprints-timeline-card > header {
+      column-gap: 0.6rem;
+    }
+
+    .footprints-timeline-card > header time {
+      font-size: 0.76rem;
+    }
+
+    .footprints-timeline-photos {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 0.2rem;
     }
   }
 

@@ -756,6 +756,12 @@ const mapData = JSON.stringify(locations).replace(/</g, "\\u003c");
       });
 
       entry.append(entryHeading);
+      if (record.note) {
+        const note = document.createElement("p");
+        note.className = "footprint-note";
+        note.textContent = record.note;
+        entry.append(note);
+      }
       if (record.relatedPosts.length > 0) {
         const related = document.createElement("nav");
         related.className = "footprint-related-posts";
@@ -801,12 +807,6 @@ const mapData = JSON.stringify(locations).replace(/</g, "\\u003c");
         entry.append(related);
       }
       entry.append(photoGrid);
-      if (record.note) {
-        const note = document.createElement("p");
-        note.className = "footprint-note";
-        note.textContent = record.note;
-        entry.append(note);
-      }
       return entry;
     };
 
@@ -1810,14 +1810,14 @@ const mapData = JSON.stringify(locations).replace(/</g, "\\u003c");
   }
 
   .footprint-note {
-    margin: 0.62rem 0 0;
+    margin: 0 0 0.35rem;
     color: color-mix(in srgb, var(--foreground) 56%, transparent);
     font-size: 0.73rem;
     line-height: 1.65;
   }
 
   .footprint-related-posts {
-    margin: -0.16rem 0 0.52rem;
+    margin: 0 0 0.52rem;
   }
 
   .footprint-related-posts ul {
@@ -2029,15 +2029,12 @@ const mapData = JSON.stringify(locations).replace(/</g, "\\u003c");
     white-space: nowrap;
   }
 
-  .footprints-timeline-card > header + .footprints-timeline-photos {
-    margin-top: 0.5rem;
-  }
-
   .footprints-timeline-photos {
     display: grid;
     grid-template-columns: repeat(6, minmax(0, 1fr));
     gap: 0.28rem;
     width: 100%;
+    margin-top: 0.55rem;
   }
 
   .footprints-timeline-photos a {
@@ -2077,7 +2074,7 @@ const mapData = JSON.stringify(locations).replace(/</g, "\\u003c");
   }
 
   .footprints-timeline-note {
-    margin: 0.6rem 0 0;
+    margin: 0.4rem 0 0;
     color: color-mix(in srgb, var(--foreground) 72%, transparent);
     font-size: 0.86rem;
     line-height: 1.7;
@@ -2088,7 +2085,7 @@ const mapData = JSON.stringify(locations).replace(/</g, "\\u003c");
     width: 100%;
     flex-wrap: wrap;
     gap: 0.25rem 1rem;
-    margin-top: 0.5rem;
+    margin-top: 0.3rem;
   }
 
   .footprints-timeline-related a {

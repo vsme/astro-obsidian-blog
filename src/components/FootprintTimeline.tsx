@@ -208,34 +208,6 @@ export default function FootprintTimeline({ locations, timezone }: Props) {
                   </p>
                 </header>
 
-                <div
-                  className="footprints-timeline-photos"
-                  data-count={Math.min(record.photos.length, 4)}
-                >
-                  {record.photos.map(photo => (
-                    <a
-                      href={photo.original}
-                      className="footprints-timeline-photo"
-                      data-src={photo.original}
-                      data-lg-size={`${photo.width}-${photo.height}`}
-                      data-sub-html={getGalleryCaption(photo)}
-                      key={photo.original}
-                      aria-label={`查看大图：${photo.alt}`}
-                    >
-                      <img
-                        src={photo.thumbnail}
-                        alt={photo.alt}
-                        width={photo.width}
-                        height={photo.height}
-                        loading="lazy"
-                        decoding="async"
-                        style={{ objectPosition: photo.position || "center" }}
-                      />
-                      {photo.caption ? <span>{photo.caption}</span> : null}
-                    </a>
-                  ))}
-                </div>
-
                 {record.note ? (
                   <p className="footprints-timeline-note">{record.note}</p>
                 ) : null}
@@ -266,6 +238,34 @@ export default function FootprintTimeline({ locations, timezone }: Props) {
                     ))}
                   </nav>
                 ) : null}
+
+                <div
+                  className="footprints-timeline-photos"
+                  data-count={Math.min(record.photos.length, 4)}
+                >
+                  {record.photos.map(photo => (
+                    <a
+                      href={photo.original}
+                      className="footprints-timeline-photo"
+                      data-src={photo.original}
+                      data-lg-size={`${photo.width}-${photo.height}`}
+                      data-sub-html={getGalleryCaption(photo)}
+                      key={photo.original}
+                      aria-label={`查看大图：${photo.alt}`}
+                    >
+                      <img
+                        src={photo.thumbnail}
+                        alt={photo.alt}
+                        width={photo.width}
+                        height={photo.height}
+                        loading="lazy"
+                        decoding="async"
+                        style={{ objectPosition: photo.position || "center" }}
+                      />
+                      {photo.caption ? <span>{photo.caption}</span> : null}
+                    </a>
+                  ))}
+                </div>
               </div>
             </article>
           ))}

@@ -13,7 +13,7 @@ import "lightgallery/css/lg-zoom.css";
 
 const sourceEntries = await getCollection(
   "footprints",
-  ({ data }) => !data.draft
+  ({ data }) => !data.draft && data.photos.some(photo => !photo.hidden)
 );
 
 const sortedEntries = sourceEntries.sort(
@@ -37,13 +37,14 @@ type MapLocation = {
 const placeGroups = new Map<string, number>();
 const locations: MapLocation[] = await Promise.all(
   sortedEntries.map(async entry => {
+    const visiblePhotos = entry.data.photos.filter(photo => !photo.hidden);
     const placeKey = `${entry.data.country}/${entry.data.region}/${entry.data.city}/${entry.data.place}`;
     if (!placeGroups.has(placeKey)) {
       placeGroups.set(placeKey, placeGroups.size);
     }
 
     const mapCover = await getImage({
-      src: entry.data.photos[0].src,
+      src: visiblePhotos[0].src,
       width: 80,
       height: 80,
       fit: "cover",
@@ -58,7 +59,7 @@ const locations: MapLocation[] = await Promise.all(
       coordinates: entry.data.coordinates,
       placeGroup: placeGroups.get(placeKey)!,
       cover: mapCover.src,
-      photoCount: entry.data.photos.length,
+      photoCount: visiblePhotos.length,
     };
   })
 );
@@ -483,7 +484,7 @@ const mapData = JSON.stringify(locations).replace(/</g, "\\u003c");
         0,
         Math.floor(viewportHeight - mapTop - bottomGap)
       );
-      const aspectRatioHeight = Math.floor(mapShell.clientWidth);
+      const aspectRatioHeight = Math.floor((mapShell.clientWidth * 4) / 5);
       const mapHeight = mobilePanelQuery.matches
         ? availableHeight
         : Math.min(availableHeight, aspectRatioHeight);

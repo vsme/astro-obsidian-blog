@@ -6,7 +6,10 @@ import { getPath } from "@/utils/getPath";
 const normalizeId = (id: string) => id.replace(/\.(md|mdx)$/, "");
 const GALLERY_MAX_EDGE = 2560;
 const GALLERY_QUALITY = 82;
-const entriesPromise = getCollection("footprints", ({ data }) => !data.draft);
+const entriesPromise = getCollection(
+  "footprints",
+  ({ data }) => !data.draft && data.photos.some(photo => !photo.hidden)
+);
 const postsPromise = getCollection("blog", ({ data }) => !data.draft);
 
 export const getStaticPaths: GetStaticPaths = async () => {
@@ -30,7 +33,7 @@ export const GET: APIRoute = async ({ params }) => {
   }
 
   const photos = await Promise.all(
-    entry.data.photos.map(async photo => {
+    entry.data.photos.filter(photo => !photo.hidden).map(async photo => {
       const scale = Math.min(
         1,
         GALLERY_MAX_EDGE / Math.max(photo.src.width, photo.src.height)

@@ -60,6 +60,7 @@ const footprints = defineCollection({
             alt: z.string(),
             caption: z.string().optional(),
             position: z.string().optional(),
+            hidden: z.boolean().optional(),
           })
         )
         .min(1),

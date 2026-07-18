@@ -36,6 +36,18 @@ type MapLocation = {
   photoCount: number;
 };
 
+const getMapCoverPosition = (position?: string) => {
+  const keywords = position?.trim().toLowerCase().split(/\s+/) || [];
+  const horizontal = keywords.find(keyword =>
+    ["left", "right"].includes(keyword)
+  );
+  const vertical = keywords.find(keyword =>
+    ["top", "bottom"].includes(keyword)
+  );
+
+  return [horizontal, vertical].filter(Boolean).join(" ") || "center";
+};
+
 const placeGroups = new Map<string, number>();
 const locations: MapLocation[] = await Promise.all(
   sortedEntries.map(async entry => {
@@ -50,7 +62,7 @@ const locations: MapLocation[] = await Promise.all(
       width: 80,
       height: 80,
       fit: "cover",
-      position: "center",
+      position: getMapCoverPosition(visiblePhotos[0].position),
       format: "webp",
       quality: 68,
     });
@@ -475,6 +487,7 @@ const mapData = JSON.stringify(locations).replace(/</g, "\\u003c");
     };
 
     const markers = new Map<string, L.Marker>();
+    const MARKER_CLUSTER_RADIUS = 50;
     const markerVisualData = new WeakMap<
       L.Marker,
       { id: string; cover: string; photoCount: number }
@@ -509,7 +522,8 @@ const mapData = JSON.stringify(locations).replace(/</g, "\\u003c");
       zoomToBoundsOnClick: false,
       spiderfyOnMaxZoom: false,
       clusterPane: "footprint-cluster-pane",
-      maxClusterRadius: 40,
+      // 覆盖照片、数量徽标和选中态的实际占位，避免相邻标记视觉重叠。
+      maxClusterRadius: MARKER_CLUSTER_RADIUS,
       iconCreateFunction: cluster => {
         const children = cluster.getAllChildMarkers();
         const photoCount = children.reduce(
@@ -557,6 +571,7 @@ const mapData = JSON.stringify(locations).replace(/</g, "\\u003c");
     let selectionVersion = 0;
     let isLoading = false;
     let galleryInstances: GalleryInstance[] = [];
+    let isPhotoGalleryOpen = false;
     type PanelState = "closed" | "half" | "expanded";
     let panelState: PanelState = "closed";
     const mobilePanelQuery = window.matchMedia("(max-width: 768px)");
@@ -706,6 +721,12 @@ const mapData = JSON.stringify(locations).replace(/</g, "\\u003c");
       entry.id = `footprint-${record.id}`;
       entry.dataset.locationId = record.id;
       entry.dataset.photoCount = String(record.photos.length);
+      entry.addEventListener("lgBeforeOpen", () => {
+        isPhotoGalleryOpen = true;
+      });
+      entry.addEventListener("lgAfterClose", () => {
+        isPhotoGalleryOpen = false;
+      });
 
       const entryHeading = document.createElement("header");
       entryHeading.className = "footprint-entry-heading";
@@ -813,6 +834,7 @@ const mapData = JSON.stringify(locations).replace(/</g, "\\u003c");
     const destroyGalleries = () => {
       galleryInstances.forEach(instance => instance.destroy());
       galleryInstances = [];
+      isPhotoGalleryOpen = false;
     };
 
     const refreshGallery = async () => {
@@ -1003,7 +1025,8 @@ const mapData = JSON.stringify(locations).replace(/</g, "\\u003c");
         ]);
         map.flyToBounds(markerBounds, {
           ...getPanelAwarePadding(),
-          maxZoom: Math.max(map.getZoom(), 10),
+          // 叶子标记只移动到可视区域中心，不改变当前缩放级别。
+          maxZoom: map.getZoom(),
           duration: 0.65,
         });
       });
@@ -1017,28 +1040,49 @@ const mapData = JSON.stringify(locations).replace(/</g, "\\u003c");
       bounds.push([location.coordinates.lat, location.coordinates.lng]);
     }
 
+    type ExpandableMarkerCluster = L.MarkerCluster & {
+      _zoom?: number;
+      _childClusters?: ExpandableMarkerCluster[];
+      _markers?: L.Marker[];
+    };
+    const getClusterExpansionZoom = (cluster: ExpandableMarkerCluster) => {
+      let bottomCluster = cluster;
+
+      while (
+        bottomCluster._childClusters?.length === 1 &&
+        bottomCluster._markers?.length === 0
+      ) {
+        bottomCluster = bottomCluster._childClusters[0];
+      }
+
+      return Math.min(
+        (bottomCluster._zoom ?? map.getZoom()) + 1,
+        map.getMaxZoom()
+      );
+    };
+
     markerClusters.on("clusterclick", event => {
-      const cluster = (event as unknown as { layer: L.MarkerCluster }).layer;
+      const cluster = (event as unknown as { layer: ExpandableMarkerCluster })
+        .layer;
       const selectedIds = cluster
         .getAllChildMarkers()
         .map((marker: L.Marker) => markerVisualData.get(marker)?.id)
         .filter((id: string | undefined): id is string => Boolean(id));
-      const clusterZoom = (cluster as L.MarkerCluster & { _zoom?: number })
-        ._zoom;
       const isSameLocation = shareLocation(selectedIds);
-      const canSplit = (clusterZoom ?? map.getZoom()) < map.getMaxZoom();
+      const expansionZoom = getClusterExpansionZoom(cluster);
+      const shouldZoomIn = !isSameLocation && expansionZoom > map.getZoom();
 
-      if (canSplit && !isSameLocation) {
-        selectFootprints();
-        map.flyToBounds(cluster.getBounds(), {
+      // 聚合标记一次点击即可查看记录；仍能拆分时只放大到下一次拆分级别。
+      selectFootprints(selectedIds);
+      if (shouldZoomIn) {
+        const center = cluster.getLatLng();
+        const centerBounds = L.latLngBounds([center, center]);
+        map.flyToBounds(centerBounds, {
           ...getPanelAwarePadding(),
-          maxZoom: map.getMaxZoom(),
+          maxZoom: expansionZoom,
           duration: 0.65,
         });
-        return;
       }
-
-      selectFootprints(selectedIds);
     });
 
     resetMapView(false);
@@ -1167,6 +1211,7 @@ const mapData = JSON.stringify(locations).replace(/</g, "\\u003c");
     document.addEventListener("keydown", event => {
       if (
         event.key === "Escape" &&
+        !isPhotoGalleryOpen &&
         panel.isConnected &&
         panelState !== "closed"
       ) {

@@ -7,6 +7,7 @@ import Breadcrumb from "@/components/Breadcrumb.astro";
 import Footer from "@/components/Footer.astro";
 import FootprintTimeline from "@/components/FootprintTimeline";
 import { SITE } from "@/config";
+import { FOOTPRINT_TIMELINE_PAGE_SIZE } from "@/utils/footprintRecords";
 import "leaflet/dist/leaflet.css";
 import "leaflet.markercluster/dist/MarkerCluster.css";
 import "lightgallery/css/lightgallery.css";
@@ -216,7 +217,8 @@ const mapData = JSON.stringify(locations).replace(/</g, "\\u003c");
     >
       <FootprintTimeline
         client:visible
-        locations={locations.map(({ id, visitedAt }) => ({ id, visitedAt }))}
+        totalItems={locations.length}
+        pageSize={FOOTPRINT_TIMELINE_PAGE_SIZE}
         timezone={SITE.timezone}
       />
     </section>
@@ -434,6 +436,7 @@ const mapData = JSON.stringify(locations).replace(/</g, "\\u003c");
       locations.map((location, index) => [location.id, { ...location, index }])
     );
     const SAME_LOCATION_RADIUS_METERS = 30;
+    const MAX_CLUSTER_PLACE_COUNT_TO_LOAD = 3;
     const distanceBetween = (
       from: { lat: number; lng: number },
       to: { lat: number; lng: number }
@@ -971,6 +974,26 @@ const mapData = JSON.stringify(locations).replace(/</g, "\\u003c");
       if (activeIds.length) void loadNextPage(selectionVersion);
     };
 
+    const closePanelForManualZoom = () => {
+      if (panelState !== "closed") selectFootprints();
+    };
+    mapElement.addEventListener("wheel", closePanelForManualZoom, {
+      passive: true,
+    });
+    mapElement.addEventListener("dblclick", closePanelForManualZoom);
+    mapElement.addEventListener(
+      "touchstart",
+      event => {
+        if (event.touches.length > 1) closePanelForManualZoom();
+      },
+      { passive: true }
+    );
+    mapElement.addEventListener("keydown", event => {
+      if (["+", "-", "=", "_"].includes(event.key)) {
+        closePanelForManualZoom();
+      }
+    });
+
     const resetMapView = (animate = true) => {
       map.stop();
 
@@ -1069,17 +1092,33 @@ const mapData = JSON.stringify(locations).replace(/</g, "\\u003c");
         .map((marker: L.Marker) => markerVisualData.get(marker)?.id)
         .filter((id: string | undefined): id is string => Boolean(id));
       const isSameLocation = shareLocation(selectedIds);
+      const distinctPlaceCount = new Set(
+        selectedIds
+          .map(id => locationById.get(id)?.placeGroup)
+          .filter((placeGroup): placeGroup is number =>
+            Number.isInteger(placeGroup)
+          )
+      ).size;
       const expansionZoom = getClusterExpansionZoom(cluster);
       const shouldZoomIn = !isSameLocation && expansionZoom > map.getZoom();
+      const shouldLoadDetails =
+        distinctPlaceCount <= MAX_CLUSTER_PLACE_COUNT_TO_LOAD;
 
-      // 聚合标记一次点击即可查看记录；仍能拆分时只放大到下一次拆分级别。
-      selectFootprints(selectedIds);
-      if (shouldZoomIn) {
+      // 同一地点的多次足迹只计作一个地点。地点超过 3 个时仅拆分聚合，
+      // 不打开详情面板，避免一次触发大量记录请求。
+      if (shouldLoadDetails) {
+        selectFootprints(selectedIds);
+      } else {
+        selectFootprints();
+      }
+      // 同一地点无法继续拆分时仍需重新定位；保持缩放级别，只将标记
+      // 移到右侧面板之外的地图视觉中心。
+      if (shouldZoomIn || (shouldLoadDetails && isSameLocation)) {
         const center = cluster.getLatLng();
         const centerBounds = L.latLngBounds([center, center]);
         map.flyToBounds(centerBounds, {
           ...getPanelAwarePadding(),
-          maxZoom: expansionZoom,
+          maxZoom: shouldZoomIn ? expansionZoom : map.getZoom(),
           duration: 0.65,
         });
       }
@@ -1159,6 +1198,20 @@ const mapData = JSON.stringify(locations).replace(/</g, "\\u003c");
 
     const zoomControl = mapZoomControl.getContainer();
     if (zoomControl) {
+      zoomControl.addEventListener(
+        "click",
+        event => {
+          if (
+            event.target instanceof Element &&
+            event.target.closest(
+              ".leaflet-control-zoom-in, .leaflet-control-zoom-out"
+            )
+          ) {
+            closePanelForManualZoom();
+          }
+        },
+        true
+      );
       const createControlIcon = (pathData: string) => {
         const icon = document.createElementNS(
           "http://www.w3.org/2000/svg",
@@ -2174,29 +2227,54 @@ const mapData = JSON.stringify(locations).replace(/</g, "\\u003c");
     line-height: 1;
   }
 
-  .footprints-pagination {
+  .footprints-infinite-sentinel {
     display: flex;
+    min-height: 3.25rem;
     align-items: center;
     justify-content: center;
-    gap: 1rem;
-    padding-top: 0.5rem;
+    color: color-mix(in srgb, var(--foreground) 48%, transparent);
+    font-size: 0.72rem;
   }
 
-  .footprints-pagination button {
-    padding: 0.52rem 0.85rem;
-    border: 1px solid color-mix(in srgb, var(--foreground) 16%, transparent);
+  .footprints-infinite-sentinel button,
+  .footprints-timeline-status button {
+    padding: 0.48rem 0.75rem;
+    border: 1px solid color-mix(in srgb, var(--accent) 24%, transparent);
     border-radius: 0.55rem;
-    background: color-mix(in srgb, var(--foreground) 4%, var(--background));
-    font-size: 0.76rem;
+    background: color-mix(in srgb, var(--accent) 6%, transparent);
+    color: color-mix(in srgb, var(--foreground) 72%, transparent);
+    font-size: 0.72rem;
+    transition:
+      border-color 160ms ease,
+      color 160ms ease;
   }
 
-  .footprints-pagination button:disabled {
-    opacity: 0.38;
+  .footprints-infinite-sentinel button:hover,
+  .footprints-timeline-status button:hover {
+    border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+    color: var(--accent);
   }
 
-  .footprints-pagination span {
-    color: color-mix(in srgb, var(--foreground) 56%, transparent);
-    font-size: 0.73rem;
+  .footprints-infinite-loading {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+  }
+
+  .footprints-infinite-loading::before {
+    width: 0.72rem;
+    height: 0.72rem;
+    border: 1px solid color-mix(in srgb, var(--accent) 24%, transparent);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: footprints-infinite-spin 700ms linear infinite;
+    content: "";
+  }
+
+  @keyframes footprints-infinite-spin {
+    to {
+      transform: rotate(1turn);
+    }
   }
 
   @media (max-width: 768px) {
@@ -2288,6 +2366,10 @@ const mapData = JSON.stringify(locations).replace(/</g, "\\u003c");
   }
 
   @media (prefers-reduced-motion: reduce) {
+    .footprints-infinite-loading::before {
+      animation: none;
+    }
+
     .photo-map-marker,
     .footprint-results-panel,
     .footprint-results-actions svg,

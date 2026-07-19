@@ -1,10 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
-type TimelineLocation = {
-  id: string;
-  visitedAt: string;
-};
-
 type FootprintPhoto = {
   thumbnail: string;
   original: string;
@@ -28,11 +23,21 @@ type FootprintRecord = {
 };
 
 type Props = {
-  locations: TimelineLocation[];
+  totalItems: number;
+  pageSize: number;
   timezone: string;
 };
 
-const PAGE_SIZE = 8;
+type FootprintTimelinePageResponse = {
+  records: FootprintRecord[];
+  pagination: {
+    currentPage: number;
+    totalPages: number;
+    totalItems: number;
+    hasMore: boolean;
+    itemsPerPage: number;
+  };
+};
 
 const escapeHTML = (value: string) =>
   value.replace(
@@ -52,43 +57,40 @@ const getGalleryCaption = (photo: FootprintPhoto) =>
     photo.caption ? `<p>${escapeHTML(photo.caption)}</p>` : ""
   }</div>`;
 
-const getPageFromUrl = (totalPages: number) => {
-  if (typeof window === "undefined") return 1;
-  const value = Number(
-    new URL(window.location.href).searchParams.get("footprints-page")
-  );
-  return Number.isInteger(value) ? Math.min(Math.max(value, 1), totalPages) : 1;
-};
-
-export default function FootprintTimeline({ locations, timezone }: Props) {
-  const totalPages = Math.max(1, Math.ceil(locations.length / PAGE_SIZE));
-  const [page, setPage] = useState(() => getPageFromUrl(totalPages));
+export default function FootprintTimeline({
+  totalItems,
+  pageSize,
+  timezone,
+}: Props) {
+  const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+  const [page, setPage] = useState(1);
   const [records, setRecords] = useState<FootprintRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  const [retryToken, setRetryToken] = useState(0);
   const listRef = useRef<HTMLDivElement>(null);
-
-  const pageLocations = useMemo(
-    () => locations.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
-    [locations, page]
-  );
+  const loadMoreRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const controller = new AbortController();
     setLoading(true);
     setError(false);
 
-    Promise.all(
-      pageLocations.map(async location => {
-        const response = await fetch(
-          `/api/footprints/${encodeURIComponent(location.id)}.json`,
-          { cache: "force-cache", signal: controller.signal }
-        );
-        if (!response.ok) throw new Error(`Failed to load ${location.id}`);
-        return (await response.json()) as FootprintRecord;
+    fetch(`/api/footprints/timeline/${page}.json`, {
+      cache: "force-cache",
+      signal: controller.signal,
+    })
+      .then(async response => {
+        if (!response.ok) {
+          throw new Error(`Failed to load footprint timeline page ${page}`);
+        }
+        return (await response.json()) as FootprintTimelinePageResponse;
       })
-    )
-      .then(setRecords)
+      .then(({ records: nextRecords }) => {
+        setRecords(currentRecords =>
+          page === 1 ? nextRecords : [...currentRecords, ...nextRecords]
+        );
+      })
       .catch(fetchError => {
         if (
           fetchError instanceof DOMException &&
@@ -102,10 +104,25 @@ export default function FootprintTimeline({ locations, timezone }: Props) {
       });
 
     return () => controller.abort();
-  }, [pageLocations]);
+  }, [page, retryToken]);
 
   useEffect(() => {
-    if (loading || error || !listRef.current) return;
+    const sentinel = loadMoreRef.current;
+    if (!sentinel || loading || error || page >= totalPages) return;
+
+    const observer = new IntersectionObserver(
+      entries => {
+        if (!entries.some(entry => entry.isIntersecting)) return;
+        setPage(currentPage => Math.min(currentPage + 1, totalPages));
+      },
+      { rootMargin: "300px 0px" }
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [error, loading, page, totalPages]);
+
+  useEffect(() => {
+    if (!records.length || !listRef.current) return;
 
     let disposed = false;
     const instances: Array<{ destroy: () => number }> = [];
@@ -145,19 +162,7 @@ export default function FootprintTimeline({ locations, timezone }: Props) {
       disposed = true;
       instances.forEach(instance => instance.destroy());
     };
-  }, [records, loading, error]);
-
-  const changePage = (nextPage: number) => {
-    const normalizedPage = Math.min(Math.max(nextPage, 1), totalPages);
-    const url = new URL(window.location.href);
-    if (normalizedPage === 1) url.searchParams.delete("footprints-page");
-    else url.searchParams.set("footprints-page", String(normalizedPage));
-    window.history.pushState({}, "", url);
-    setPage(normalizedPage);
-    document
-      .querySelector("#footprints-timeline")
-      ?.scrollIntoView({ behavior: "smooth" });
-  };
+  }, [records]);
 
   const dateFormatter = useMemo(
     () =>
@@ -179,19 +184,22 @@ export default function FootprintTimeline({ locations, timezone }: Props) {
   );
 
   return (
-    <div
-      className="footprints-timeline-content"
-      aria-live="polite"
-      aria-busy={loading}
-    >
-      {loading ? (
+    <div className="footprints-timeline-content" aria-busy={loading}>
+      {loading && records.length === 0 ? (
         <p className="footprints-timeline-status">正在加载足迹…</p>
       ) : null}
-      {error ? (
-        <p className="footprints-timeline-status">足迹加载失败，请稍后重试。</p>
+      {error && records.length === 0 ? (
+        <div className="footprints-timeline-status">
+          <button
+            type="button"
+            onClick={() => setRetryToken(value => value + 1)}
+          >
+            加载失败，点击重试
+          </button>
+        </div>
       ) : null}
 
-      {!loading && !error ? (
+      {records.length ? (
         <div className="footprints-timeline-list" ref={listRef}>
           {records.map(record => (
             <article className="footprints-timeline-item" key={record.id}>
@@ -272,27 +280,27 @@ export default function FootprintTimeline({ locations, timezone }: Props) {
         </div>
       ) : null}
 
-      {totalPages > 1 ? (
-        <nav className="footprints-pagination" aria-label="足迹分页">
+      <div
+        className="footprints-infinite-sentinel"
+        ref={loadMoreRef}
+        role="status"
+        aria-live="polite"
+      >
+        {loading && records.length ? (
+          <span className="footprints-infinite-loading">正在加载更多足迹…</span>
+        ) : null}
+        {error && records.length ? (
           <button
             type="button"
-            onClick={() => changePage(page - 1)}
-            disabled={page === 1}
+            onClick={() => setRetryToken(value => value + 1)}
           >
-            上一页
+            加载失败，点击重试
           </button>
-          <span>
-            第 {page} / {totalPages} 页
-          </span>
-          <button
-            type="button"
-            onClick={() => changePage(page + 1)}
-            disabled={page === totalPages}
-          >
-            下一页
-          </button>
-        </nav>
-      ) : null}
+        ) : null}
+        {!loading && !error && records.length && page >= totalPages ? (
+          <span>已展示全部 {records.length} 条足迹</span>
+        ) : null}
+      </div>
     </div>
   );
 }

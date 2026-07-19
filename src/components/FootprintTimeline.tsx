@@ -1,4 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { SUPABASE_KEY, SUPABASE_URL } from "astro:env/client";
+import EmojiReactions from "./EmojiReactions";
+import { getFootprintReactionId } from "../utils/footprintReactions";
 
 type FootprintPhoto = {
   thumbnail: string;
@@ -274,6 +277,10 @@ export default function FootprintTimeline({
                     </a>
                   ))}
                 </div>
+
+                {SUPABASE_URL && SUPABASE_KEY ? (
+                  <EmojiReactions id={getFootprintReactionId(record.id)} />
+                ) : null}
               </div>
             </article>
           ))}

@@ -44,10 +44,16 @@ interface EmojiReaction {
   defaultShow?: boolean;
 }
 
-function mergeReactionRows(
-  reactions: EmojiReaction[],
-  rows: ReactionRow[]
-) {
+interface ReactionSyncDetail {
+  contentId: string;
+  emoji: string;
+  count: number;
+  isActive: boolean;
+}
+
+const REACTION_SYNC_EVENT = "astro-paper:reaction-sync";
+
+function mergeReactionRows(reactions: EmojiReaction[], rows: ReactionRow[]) {
   return reactions.map(reaction => {
     const cachedReaction = rows.find(row => row.emoji === reaction.emoji);
     return {
@@ -101,7 +107,15 @@ const EmojiButton: React.FC<{
 };
 
 // 主要的表情组件
-const EmojiReactions: React.FC<{ id: string }> = ({ id }) => {
+interface EmojiReactionsProps {
+  id: string;
+  menuAlign?: "auto" | "contained" | "left" | "center" | "right";
+}
+
+const EmojiReactions: React.FC<EmojiReactionsProps> = ({
+  id,
+  menuAlign = "auto",
+}) => {
   const [hoveredEmoji, setHoveredEmoji] = useState<string | null>(null);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [menuPosition, setMenuPosition] = useState<"left" | "center" | "right">(
@@ -111,6 +125,7 @@ const EmojiReactions: React.FC<{ id: string }> = ({ id }) => {
   const [error, setError] = useState<string | null>(null);
   const [userHash, setUserHash] = useState<string>("");
   const errorTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const reactionsRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const [emojiReactions, setEmojiReactions] = useState<EmojiReaction[]>([
@@ -139,9 +154,7 @@ const EmojiReactions: React.FC<{ id: string }> = ({ id }) => {
     void getContentReactions(id, currentUserHash)
       .then(reactions => {
         if (!cancelled) {
-          setEmojiReactions(previous =>
-            mergeReactionRows(previous, reactions)
-          );
+          setEmojiReactions(previous => mergeReactionRows(previous, reactions));
         }
       })
       .catch(error => {
@@ -151,6 +164,26 @@ const EmojiReactions: React.FC<{ id: string }> = ({ id }) => {
     return () => {
       cancelled = true;
     };
+  }, [id]);
+
+  // 同一内容可能同时出现在地图弹窗和时间线中，保持两个实例即时同步。
+  useEffect(() => {
+    const handleReactionSync = (event: Event) => {
+      const { contentId, emoji, count, isActive } = (
+        event as CustomEvent<ReactionSyncDetail>
+      ).detail;
+      if (contentId !== id) return;
+
+      setEmojiReactions(previous =>
+        previous.map(reaction =>
+          reaction.emoji === emoji ? { ...reaction, count, isActive } : reaction
+        )
+      );
+    };
+
+    window.addEventListener(REACTION_SYNC_EVENT, handleReactionSync);
+    return () =>
+      window.removeEventListener(REACTION_SYNC_EVENT, handleReactionSync);
   }, [id]);
 
   // 监听点击外部区域事件
@@ -195,16 +228,14 @@ const EmojiReactions: React.FC<{ id: string }> = ({ id }) => {
       const result = await toggleEmojiReaction(id, reaction.emoji, userHash);
 
       if (result) {
-        setEmojiReactions(prev =>
-          prev.map((r, i) => {
-            if (i === index) {
-              return {
-                ...r,
-                count: result.new_count,
-                isActive: result.is_active,
-              };
-            }
-            return r;
+        window.dispatchEvent(
+          new CustomEvent<ReactionSyncDetail>(REACTION_SYNC_EVENT, {
+            detail: {
+              contentId: id,
+              emoji: result.emoji,
+              count: result.new_count,
+              isActive: result.is_active,
+            },
           })
         );
       }
@@ -227,6 +258,34 @@ const EmojiReactions: React.FC<{ id: string }> = ({ id }) => {
 
   // 切换菜单显示状态
   const toggleMenu = () => {
+    if (
+      !isMenuOpen &&
+      menuAlign === "contained" &&
+      reactionsRef.current &&
+      buttonRef.current
+    ) {
+      const reactionsRect = reactionsRef.current.getBoundingClientRect();
+      const buttonRect = buttonRef.current.getBoundingClientRect();
+      const buttonCenterX = buttonRect.left + buttonRect.width / 2;
+      const estimatedMenuWidth = 192;
+
+      if (buttonCenterX - estimatedMenuWidth / 2 < reactionsRect.left) {
+        setMenuPosition("left");
+      } else if (buttonCenterX + estimatedMenuWidth / 2 > reactionsRect.right) {
+        setMenuPosition("right");
+      } else {
+        setMenuPosition("center");
+      }
+      setIsMenuOpen(true);
+      return;
+    }
+
+    if (!isMenuOpen && menuAlign !== "auto" && menuAlign !== "contained") {
+      setMenuPosition(menuAlign);
+      setIsMenuOpen(true);
+      return;
+    }
+
     if (!isMenuOpen && buttonRef.current) {
       // 检测按钮位置来决定菜单显示方向
       const buttonRect = buttonRef.current.getBoundingClientRect();
@@ -246,7 +305,11 @@ const EmojiReactions: React.FC<{ id: string }> = ({ id }) => {
   };
 
   return (
-    <div id={id} className="emoji-reactions border-skin-line/30 mt-4">
+    <div
+      id={id}
+      ref={reactionsRef}
+      className="emoji-reactions border-skin-line/30 mt-4"
+    >
       <div className="flex flex-wrap items-center gap-2">
         {/* 已激活的表情显示 */}
         {emojiReactions

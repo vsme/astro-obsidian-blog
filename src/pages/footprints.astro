@@ -238,6 +238,11 @@ const mapData = JSON.stringify(locations).replace(/</g, "\\u003c");
 <script>
   import L from "leaflet";
   import "leaflet.markercluster";
+  import { createElement } from "react";
+  import { createRoot, type Root } from "react-dom/client";
+  import { SUPABASE_KEY, SUPABASE_URL } from "astro:env/client";
+  import EmojiReactions from "@/components/EmojiReactions";
+  import { getFootprintReactionId } from "@/utils/footprintReactions";
 
   type LocationData = {
     id: string;
@@ -855,7 +860,27 @@ const mapData = JSON.stringify(locations).replace(/</g, "\\u003c");
         entry.append(related);
       }
       entry.append(photoGrid);
+
+      if (SUPABASE_URL && SUPABASE_KEY) {
+        const reactions = document.createElement("div");
+        reactions.className = "footprint-reactions";
+        entry.append(reactions);
+        const root = createRoot(reactions);
+        reactionRoots.set(reactions, root);
+        root.render(
+          createElement(EmojiReactions, {
+            id: getFootprintReactionId(record.id),
+            menuAlign: "contained",
+          })
+        );
+      }
       return entry;
+    };
+
+    const reactionRoots = new Map<Element, Root>();
+    const destroyReactionRoots = () => {
+      reactionRoots.forEach(root => root.unmount());
+      reactionRoots.clear();
     };
 
     const destroyGalleries = () => {
@@ -970,6 +995,7 @@ const mapData = JSON.stringify(locations).replace(/</g, "\\u003c");
       );
 
       destroyGalleries();
+      destroyReactionRoots();
       gallery.replaceChildren();
       if (activeIds.length) {
         if (panelState === "closed") setPanelState("half");
@@ -1061,10 +1087,7 @@ const mapData = JSON.stringify(locations).replace(/</g, "\\u003c");
           targetZoom
         );
         const targetCenter = map.unproject(
-          southWestPoint
-            .add(northEastPoint)
-            .divideBy(2)
-            .add(paddingOffset),
+          southWestPoint.add(northEastPoint).divideBy(2).add(paddingOffset),
           targetZoom
         );
 
@@ -2124,6 +2147,9 @@ const mapData = JSON.stringify(locations).replace(/</g, "\\u003c");
   }
 
   .footprints-timeline {
+    position: relative;
+    z-index: 0;
+    isolation: isolate;
     width: 100%;
     max-width: none;
     margin-top: 0;

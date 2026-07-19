@@ -295,6 +295,10 @@ const mapData = JSON.stringify(locations).replace(/</g, "\\u003c");
     const map = L.map(mapElement, {
       zoomControl: false,
       scrollWheelZoom: true,
+      // 允许 fitBounds 使用小数缩放级别，避免整数级别之间产生过大留白。
+      zoomSnap: 0.25,
+      zoomDelta: 1,
+      wheelPxPerZoomLevel: 40,
       attributionControl: true,
     });
     const mapZoomControl = L.control
@@ -643,6 +647,26 @@ const mapData = JSON.stringify(locations).replace(/</g, "\\u003c");
       };
     };
 
+    const moveToPanelAwareCenter = (
+      center: L.LatLngExpression,
+      targetZoom: number
+    ) => {
+      const { paddingTopLeft, paddingBottomRight } = getPanelAwarePadding();
+      const paddingOffset = L.point(paddingBottomRight)
+        .subtract(L.point(paddingTopLeft))
+        .divideBy(2);
+      const targetCenter = map.unproject(
+        map.project(center, targetZoom).add(paddingOffset),
+        targetZoom
+      );
+
+      if (Math.abs(map.getZoom() - targetZoom) < 0.001) {
+        map.panTo(targetCenter, { animate: true, duration: 0.65 });
+      } else {
+        map.flyTo(targetCenter, targetZoom, { duration: 0.65 });
+      }
+    };
+
     const overview = document.querySelector<HTMLElement>(
       ".footprints-overview"
     );
@@ -745,7 +769,7 @@ const mapData = JSON.stringify(locations).replace(/</g, "\\u003c");
       placeText.textContent = record.place;
       place.append(createPinIcon(), placeText);
 
-      entryHeading.append(date, place);
+      entryHeading.append(place, date);
 
       const photoGrid = document.createElement("div");
       photoGrid.className = "footprint-photo-grid";
@@ -997,23 +1021,58 @@ const mapData = JSON.stringify(locations).replace(/</g, "\\u003c");
     const resetMapView = (animate = true) => {
       map.stop();
 
+      const moveToInitialView = (center: L.LatLngExpression, zoom: number) => {
+        if (!animate) {
+          map.setView(center, zoom, { animate: false });
+        } else if (Math.abs(map.getZoom() - zoom) < 0.001) {
+          // 缩放级别没有变化时只平移，避免同级瓦片被重新缩放而模糊。
+          map.panTo(center, { animate: true, duration: 0.55 });
+        } else {
+          map.flyTo(center, zoom, { duration: 0.8 });
+        }
+      };
+
       if (bounds.length > 1) {
-        const options = { padding: [48, 48] as L.PointTuple, maxZoom: 4 };
-        if (animate) {
-          map.flyToBounds(bounds, { ...options, duration: 0.8 });
-        } else {
-          map.fitBounds(bounds, options);
-        }
+        const edgePadding = mobilePanelQuery.matches ? 32 : 64;
+        const verticalOffset = mobilePanelQuery.matches ? 16 : 24;
+        const initialBounds = L.latLngBounds(bounds);
+        const paddingTopLeft = L.point(
+          edgePadding,
+          edgePadding + verticalOffset
+        );
+        const paddingBottomRight = L.point(
+          edgePadding,
+          edgePadding - verticalOffset
+        );
+        const targetZoom = map.getBoundsZoom(
+          initialBounds,
+          false,
+          paddingTopLeft.add(paddingBottomRight)
+        );
+        const paddingOffset = paddingBottomRight
+          .subtract(paddingTopLeft)
+          .divideBy(2);
+        const southWestPoint = map.project(
+          initialBounds.getSouthWest(),
+          targetZoom
+        );
+        const northEastPoint = map.project(
+          initialBounds.getNorthEast(),
+          targetZoom
+        );
+        const targetCenter = map.unproject(
+          southWestPoint
+            .add(northEastPoint)
+            .divideBy(2)
+            .add(paddingOffset),
+          targetZoom
+        );
+
+        moveToInitialView(targetCenter, targetZoom);
       } else if (bounds.length === 1) {
-        if (animate) {
-          map.flyTo(bounds[0], 10, { duration: 0.8 });
-        } else {
-          map.setView(bounds[0], 10);
-        }
-      } else if (animate) {
-        map.flyTo([35.8617, 104.1954], 4, { duration: 0.8 });
+        moveToInitialView(bounds[0], 10);
       } else {
-        map.setView([35.8617, 104.1954], 4);
+        moveToInitialView([35.8617, 104.1954], 4);
       }
     };
 
@@ -1042,16 +1101,11 @@ const mapData = JSON.stringify(locations).replace(/</g, "\\u003c");
 
       marker.on("click", () => {
         selectFootprints([location.id]);
-        const markerBounds = L.latLngBounds([
+        // 叶子标记只移动到可视区域中心，不改变当前缩放级别。
+        moveToPanelAwareCenter(
           [location.coordinates.lat, location.coordinates.lng],
-          [location.coordinates.lat, location.coordinates.lng],
-        ]);
-        map.flyToBounds(markerBounds, {
-          ...getPanelAwarePadding(),
-          // 叶子标记只移动到可视区域中心，不改变当前缩放级别。
-          maxZoom: map.getZoom(),
-          duration: 0.65,
-        });
+          map.getZoom()
+        );
       });
       markerVisualData.set(marker, {
         id: location.id,
@@ -1114,20 +1168,16 @@ const mapData = JSON.stringify(locations).replace(/</g, "\\u003c");
       // 同一地点无法继续拆分时仍需重新定位；保持缩放级别，只将标记
       // 移到右侧面板之外的地图视觉中心。
       if (shouldZoomIn || (shouldLoadDetails && isSameLocation)) {
-        const center = cluster.getLatLng();
-        const centerBounds = L.latLngBounds([center, center]);
-        map.flyToBounds(centerBounds, {
-          ...getPanelAwarePadding(),
-          maxZoom: shouldZoomIn ? expansionZoom : map.getZoom(),
-          duration: 0.65,
-        });
+        moveToPanelAwareCenter(
+          cluster.getLatLng(),
+          shouldZoomIn ? expansionZoom : map.getZoom()
+        );
       }
     });
 
-    resetMapView(false);
-
     type FootprintsView = "map" | "timeline";
     const VIEW_STORAGE_KEY = "footprints-preferred-view";
+    let hasFittedInitialMapView = false;
     const setActiveView = (view: FootprintsView, persist = true) => {
       const showMap = view === "map";
       mapShell.hidden = !showMap;
@@ -1158,6 +1208,10 @@ const mapData = JSON.stringify(locations).replace(/</g, "\\u003c");
         requestAnimationFrame(() => {
           updateMapViewportHeight();
           map.invalidateSize({ pan: false });
+          if (!hasFittedInitialMapView) {
+            resetMapView(false);
+            hasFittedInitialMapView = true;
+          }
         });
       }
     };
@@ -1794,11 +1848,14 @@ const mapData = JSON.stringify(locations).replace(/</g, "\\u003c");
   }
 
   .footprint-date {
+    grid-column: 2;
+    grid-row: 1;
     color: color-mix(in srgb, var(--foreground) 54%, transparent);
     font-size: 0.7rem;
     font-variant-numeric: tabular-nums;
     letter-spacing: 0.025em;
     line-height: 1.35;
+    text-align: right;
     white-space: nowrap;
   }
 
@@ -1812,10 +1869,10 @@ const mapData = JSON.stringify(locations).replace(/</g, "\\u003c");
 
   .footprint-entry-heading h3 {
     display: flex;
-    grid-column: 2;
+    grid-column: 1;
     grid-row: 1;
     align-items: center;
-    justify-content: flex-end;
+    justify-content: flex-start;
     gap: 0.35rem;
     margin: 0;
     min-width: 0;

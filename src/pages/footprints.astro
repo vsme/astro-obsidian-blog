@@ -945,7 +945,7 @@ const mapData = JSON.stringify(locations).replace(/</g, "\\u003c");
           pageIds.map(async id => {
             const response = await fetch(
               `/api/footprints/${encodeURIComponent(id)}.json`,
-              { cache: "force-cache" }
+              { cache: "no-cache" }
             );
             if (!response.ok) {
               throw new Error(`Failed to load footprint ${id}`);

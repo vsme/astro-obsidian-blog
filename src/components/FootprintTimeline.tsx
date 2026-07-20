@@ -80,7 +80,7 @@ export default function FootprintTimeline({
     setError(false);
 
     fetch(`/api/footprints/timeline/${page}.json`, {
-      cache: "force-cache",
+      cache: "no-cache",
       signal: controller.signal,
     })
       .then(async response => {

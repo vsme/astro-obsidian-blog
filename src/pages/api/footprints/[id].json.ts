@@ -39,7 +39,7 @@ export const GET: APIRoute = async ({ params }) => {
     headers: {
       "Content-Type": "application/json; charset=utf-8",
       "Cache-Control": import.meta.env.PROD
-        ? "public, max-age=31536000, immutable"
+        ? "public, max-age=0, must-revalidate"
         : "no-store",
     },
   });

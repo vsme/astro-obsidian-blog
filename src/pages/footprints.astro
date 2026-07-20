@@ -92,47 +92,49 @@ const mapData = JSON.stringify(locations).replace(/</g, "\\u003c");
     id="main-content"
     class="footprints-page mx-auto mt-4 w-full max-w-app px-4 pb-12"
   >
-    <header class="footprints-overview">
-      <div>
-        <h1 class="text-2xl font-semibold sm:text-3xl">
-          <span>{totalCities}</span> 个城市 ·
-          <span>{locations.length}</span> 个足迹
-        </h1>
-      </div>
-      <p class="footprints-tagline">地图标记去向，照片留下当时的光。</p>
-    </header>
+    <div class="footprints-page-controls">
+      <header class="footprints-overview">
+        <div>
+          <h1 class="text-2xl font-semibold sm:text-3xl">
+            <span>{totalCities}</span> 个城市 ·
+            <span>{locations.length}</span> 个足迹
+          </h1>
+        </div>
+        <p class="footprints-tagline">地图标记去向，照片留下当时的光。</p>
+      </header>
 
-    <div class="footprints-view-toolbar" data-pinned="false">
-      <div
-        class="footprints-view-switch diary-filter-options"
-        role="tablist"
-        aria-label="足迹展示方式"
-      >
-        <span
-          id="footprints-view-active-indicator"
-          class="diary-filter-active-indicator"
-          aria-hidden="true"></span>
-        <button
-          id="footprints-map-tab"
-          type="button"
-          role="tab"
-          aria-selected="true"
-          aria-controls="footprints-map-view"
-          data-footprints-view="map"
+      <div class="footprints-view-toolbar" data-pinned="false">
+        <div
+          class="footprints-view-switch diary-filter-options"
+          role="tablist"
+          aria-label="足迹展示方式"
         >
-          地图
-        </button>
-        <button
-          id="footprints-timeline-tab"
-          type="button"
-          role="tab"
-          aria-selected="false"
-          aria-controls="footprints-timeline"
-          data-footprints-view="timeline"
-          tabindex="-1"
-        >
-          时间线
-        </button>
+          <span
+            id="footprints-view-active-indicator"
+            class="diary-filter-active-indicator"
+            aria-hidden="true"></span>
+          <button
+            id="footprints-map-tab"
+            type="button"
+            role="tab"
+            aria-selected="true"
+            aria-controls="footprints-map-view"
+            data-footprints-view="map"
+          >
+            地图
+          </button>
+          <button
+            id="footprints-timeline-tab"
+            type="button"
+            role="tab"
+            aria-selected="false"
+            aria-controls="footprints-timeline"
+            data-footprints-view="timeline"
+            tabindex="-1"
+          >
+            时间线
+          </button>
+        </div>
       </div>
     </div>
 
@@ -1382,6 +1384,10 @@ const mapData = JSON.stringify(locations).replace(/</g, "\\u003c");
     --footprint-gap: 0.35rem;
   }
 
+  .footprints-page-controls {
+    display: contents;
+  }
+
   .lg-outer .lg-thumb-outer {
     background: color-mix(in srgb, var(--background) 22%, #050708);
   }
@@ -1483,7 +1489,9 @@ const mapData = JSON.stringify(locations).replace(/</g, "\\u003c");
   }
 
   .footprints-view-switch button {
-    width: 4.5rem;
+    width: auto;
+    min-width: 4.5rem;
+    white-space: nowrap;
   }
 
   .footprints-view-switch button:focus-visible {
@@ -2361,8 +2369,34 @@ const mapData = JSON.stringify(locations).replace(/</g, "\\u003c");
   }
 
   @media (max-width: 768px) {
+    .footprints-page-controls {
+      display: block;
+      margin-bottom: 0.65rem;
+    }
+
     .footprints-overview {
-      align-items: flex-start;
+      min-width: 0;
+      margin-bottom: 0;
+    }
+
+    .footprints-overview h1 {
+      font-size: 1.25rem;
+      line-height: 1.35;
+    }
+
+    .footprints-tagline {
+      display: none;
+    }
+
+    .footprints-view-toolbar {
+      position: static;
+      margin-top: 0.4rem;
+      margin-bottom: 0;
+      padding-block: 0;
+    }
+
+    .footprints-view-toolbar::before {
+      display: none;
     }
 
     .footprint-results-panel {
@@ -2411,13 +2445,7 @@ const mapData = JSON.stringify(locations).replace(/</g, "\\u003c");
 
   @media (max-width: 420px) {
     .footprints-overview {
-      flex-direction: column;
-      gap: 0.25rem;
-    }
-
-    .footprints-tagline {
-      align-self: flex-start;
-      margin-bottom: 0;
+      display: block;
     }
 
     .footprint-photo-grid {

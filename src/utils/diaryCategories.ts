@@ -15,21 +15,39 @@ interface CategorizedEntry {
   }>;
 }
 
+type CategorizedTimeBlock = CategorizedEntry["timeBlocks"][number];
+
+function timeBlockMatchesDiaryCategory(
+  block: CategorizedTimeBlock,
+  category: DiaryCategory
+) {
+  if (category === "daily") return !block.mediaCards?.length;
+
+  return block.mediaCards?.some(card => {
+    if (category === "reading") return card.type === "book";
+    if (category === "watching") {
+      return card.type === "movie" || card.type === "tv";
+    }
+    return card.type === "music";
+  });
+}
+
 export function entryMatchesDiaryCategory(
   entry: CategorizedEntry,
   category: DiaryCategory
 ) {
-  if (category === "daily") {
-    return entry.timeBlocks.every(block => !block.mediaCards?.length);
-  }
-
   return entry.timeBlocks.some(block =>
-    block.mediaCards?.some(card => {
-      if (category === "reading") return card.type === "book";
-      if (category === "watching") {
-        return card.type === "movie" || card.type === "tv";
-      }
-      return card.type === "music";
-    })
+    timeBlockMatchesDiaryCategory(block, category)
   );
+}
+
+export function filterEntryByDiaryCategory<T extends CategorizedEntry>(
+  entry: T,
+  category: DiaryCategory
+): T | null {
+  const timeBlocks = entry.timeBlocks.filter(block =>
+    timeBlockMatchesDiaryCategory(block, category)
+  );
+
+  return timeBlocks.length ? ({ ...entry, timeBlocks } as T) : null;
 }

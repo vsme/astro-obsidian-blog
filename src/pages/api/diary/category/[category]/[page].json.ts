@@ -3,7 +3,7 @@ import { getCollection } from "astro:content";
 import { parseEntry } from "@/utils/parseEntry";
 import {
   DIARY_CATEGORIES,
-  entryMatchesDiaryCategory,
+  filterEntryByDiaryCategory,
 } from "@/utils/diaryCategories";
 
 const ITEMS_PER_PAGE = 5;
@@ -32,9 +32,10 @@ export const getStaticPaths: GetStaticPaths = async () => {
   const parsedEntries = await Promise.all(publishedEntries.map(parseEntry));
 
   return DIARY_CATEGORIES.flatMap(category => {
-    const categoryEntries = parsedEntries.filter(entry =>
-      entryMatchesDiaryCategory(entry, category)
-    );
+    const categoryEntries = parsedEntries.flatMap(entry => {
+      const filteredEntry = filterEntryByDiaryCategory(entry, category);
+      return filteredEntry ? [filteredEntry] : [];
+    });
     const totalPages = Math.ceil(categoryEntries.length / ITEMS_PER_PAGE);
     const generatedPages = Math.max(totalPages, 1);
 

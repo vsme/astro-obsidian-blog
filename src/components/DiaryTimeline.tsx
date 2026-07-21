@@ -6,7 +6,7 @@ import React, {
   useState,
 } from "react";
 import DiaryEntryReact, { type TimeBlock } from "./DiaryEntryReact";
-import { entryMatchesDiaryCategory } from "@/utils/diaryCategories";
+import { filterEntryByDiaryCategory } from "@/utils/diaryCategories";
 
 export interface ParsedEntry {
   date: string;
@@ -92,9 +92,10 @@ const DiaryTimeline: React.FC<DiaryTimelineProps> = ({
     category: Exclude<CategoryFilter, "all">
   ): CategoryState => ({
     entries: localFiltering
-      ? initialEntries.filter(entry =>
-          entryMatchesDiaryCategory(entry, category)
-        )
+      ? initialEntries.flatMap(entry => {
+          const filteredEntry = filterEntryByDiaryCategory(entry, category);
+          return filteredEntry ? [filteredEntry] : [];
+        })
       : [],
     currentPage: localFiltering ? 1 : 0,
     totalPages: localFiltering ? 1 : 0,
@@ -437,8 +438,11 @@ const DiaryTimeline: React.FC<DiaryTimelineProps> = ({
     async (category: CategoryFilter) => {
       if (category === activeCategory) return;
       if (localFiltering) {
+        const keepToolbarPinned = isToolbarPinned();
         setActiveJumpTarget(null);
         commitCategoryTransition(category);
+        await waitForLayout();
+        if (keepToolbarPinned) alignFeedStartBelowToolbar();
         return;
       }
 

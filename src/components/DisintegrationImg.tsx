@@ -1183,12 +1183,12 @@ const DisintegrationImg: React.FC<Props> = ({ image }) => {
         height={image.height}
         decoding="async"
         draggable={false}
-        className="disintegration-img block h-full w-full"
+        className="disintegration-img block h-full w-full dark:brightness-75"
         alt=""
       />
       <canvas
         ref={canvasRef}
-        className="pointer-events-none absolute z-[1] block"
+        className="pointer-events-none absolute z-[1] block dark:brightness-75"
         aria-hidden="true"
         style={{ opacity: 0 }}
       />

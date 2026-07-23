@@ -34,6 +34,7 @@
 │   ├── data/
 │   │   ├── blog/        # 博客文章
 │   │   ├── diary/       # 日常时间线
+│   │   ├── footprints/  # 照片足迹
 │   │   └── attachment/  # 媒体附件
 │   ├── layouts/         # 页面布局
 │   ├── pages/           # 页面路由
@@ -163,6 +164,52 @@ title: 电影标题
 卡片建议搭配 Obsidian 使用（PS:需要自己写抓取脚本）：
 
 https://github.com/user-attachments/assets/fab12904-d1db-41c2-83bf-fd26013910f1
+
+### 足迹
+
+足迹内容建议搭配 Obsidian 插件
+[Footprint Studio](https://github.com/vsme/obsidian-footprint-studio) 使用。插件面向本项目的足迹格式，可辅助整理照片和地点信息、生成足迹 Markdown，减少手动维护 frontmatter 的工作。
+
+在 `src/data/footprints/` 目录下创建 Markdown 或 MDX 文件，例如 `2026-07-04-daruyishengjing.md`。
+
+每条足迹至少需要包含访问日期、地点、经纬度和一张照片：
+
+```markdown
+---
+visitedAt: 2026-07-04
+country: "中国"
+region: "江苏省"
+city: "苏州市"
+district: "吴中区" # 可选
+town: "金庭镇" # 可选
+street: "西洞庭山路" # 可选
+place: "大如意圣境"
+coordinates:
+  lat: 31.101812
+  lng: 120.234868
+draft: false # 可选，设为 true 时不公开
+relatedPosts: # 可选，填写博客文章的内容 ID
+  - "相关文章"
+photos:
+  - src: "../attachment/footprints/2026-07-04-daruyishengjing/photo.jpg"
+    alt: "大如意圣境"
+    caption: "摸摸佛脚" # 可选
+    position: "center top" # 可选，对应 CSS object-position
+  - src: "../attachment/footprints/2026-07-04-daruyishengjing/other.jpg"
+    alt: "大如意圣境"
+    hidden: true # 可选，不在足迹相册中展示
+---
+
+这里可以补充当时的见闻和感受，正文会作为足迹备注展示。
+```
+
+注意：
+
+- `coordinates.lat` 和 `coordinates.lng` 分别使用十进制度格式的纬度和经度。
+- `photos.src` 使用相对于当前 Markdown 文件的路径，图片建议统一放在
+  `src/data/attachment/footprints/日期-地点/` 中。
+- `alt` 应描述照片内容，既方便无障碍访问，也能在图片无法加载时提供信息。
+- 同一地点可以创建多条不同日期的记录，地图会按位置聚合展示。
 
 ## 🎨 自定义样式
 

@@ -135,10 +135,11 @@ const { totalRecords } = Astro.props;
   const SPECULAR_INTENSITY = 0.195;
   const SPECULAR_INTENSITY_LIGHT = 0.16;
   const RIVER_DEPTH = 64;
-  const MAX_TRAILS = 10;
-  const TRAIL_LIFETIME = 1800;
-  const TRAIL_SAMPLE_INTERVAL = 38;
-  const TRAIL_FORCE_DISTANCE = 18;
+  const MAX_TRAILS = 12;
+  const TRAIL_LIFETIME = 1500;
+  const TRAIL_SAMPLE_INTERVAL = 28;
+  const TRAIL_SAMPLE_DISTANCE = 9;
+  const MAX_TRAIL_SAMPLES_PER_MOVE = 4;
   const TOUCH_TAP_MAX_DURATION = 500;
   const TOUCH_TAP_MAX_DISTANCE = 12;
 
@@ -198,6 +199,8 @@ const { totalRecords } = Astro.props;
     uniform int uTrailCount;
     uniform vec4 uTrails[MAX_TRAILS];
     uniform vec4 uTrailMotion[MAX_TRAILS];
+    uniform vec4 uPointer;
+    uniform float uPointerPresence;
 
     out vec3 vWorldPosition;
     out vec3 vNormal;
@@ -230,84 +233,59 @@ const { totalRecords } = Astro.props;
 
         vec4 trail = uTrails[index];
         vec4 motion = uTrailMotion[index];
-        vec2 segment = trail.zw - trail.xy;
-        float segmentLengthSquared = dot(segment, segment);
-        if (segmentLengthSquared < 0.0001) continue;
-
         float age = max(0.0, uTime - motion.z);
         if (age > ${TRAIL_LIFETIME / 1000}) continue;
 
         float speedRatio = clamp(motion.w / 20.0, 0.0, 1.0);
-        float segmentLength = sqrt(segmentLengthSquared);
-        vec2 tangent = segment / segmentLength;
-        vec2 relative = surfacePosition - trail.xy;
-        float projection = clamp(
-          dot(relative, segment) / segmentLengthSquared,
-          0.0,
-          1.0
-        );
-        vec2 closestPoint = trail.xy + segment * projection;
-        vec2 fromPath = surfacePosition - closestPoint;
-        float pathDistance = length(fromPath);
+        float rippleDistance = length(surfacePosition - trail.zw);
         float growth = clamp(
           age / ${TRAIL_LIFETIME / 1000},
           0.0,
           1.0
         );
-        float waveRadius = 5.0 + age * uRippleRadius * 0.95;
-        float waveThickness = mix(
-          8.0,
-          19.0,
-          smoothstep(0.0, 1.0, growth)
-        );
-        float waveOffset = pathDistance - waveRadius;
+        float waveRadius = 2.0 +
+          age * uRippleRadius * mix(0.58, 0.9, speedRatio);
+        float waveThickness = mix(5.5, 12.0, growth);
+        float waveOffset = rippleDistance - waveRadius;
         float recency = float(index + 1) /
           max(float(uTrailCount), 1.0);
-        float trailWeight = mix(0.56, 1.0, recency);
-        float life = exp(-age * 2.15) *
-          (1.0 - smoothstep(1.35, ${TRAIL_LIFETIME / 1000}, age));
+        float trailWeight = mix(0.72, 1.0, recency);
+        float life = exp(-age * 2.0) *
+          (1.0 - smoothstep(1.0, ${TRAIL_LIFETIME / 1000}, age));
         float organic =
           sin(surfacePosition.x * 0.041 + surfacePosition.y * 0.057) * 0.55 +
           sin(surfacePosition.x * 0.019 - surfacePosition.y * 0.033) * 0.35;
         float waveEnvelope = exp(-pow(
-          waveOffset / (waveThickness * 1.75),
+          waveOffset / waveThickness,
           2.0
         ));
         float wave = (
-          cos(waveOffset * 0.21 + organic * 0.22) +
-          cos(waveOffset * 0.105 - organic * 0.15) * 0.22
+          cos(waveOffset * 0.27 + organic * 0.18) +
+          cos(waveOffset * 0.135 - organic * 0.12) * 0.18
         ) * waveEnvelope;
-        float wakeAmplitude = mix(0.55, 3.0, speedRatio) *
+        float wakeAmplitude = mix(0.28, 1.55, speedRatio) *
           trailWeight * life;
         pointerWave += wave * wakeAmplitude;
-
-        if (index == uTrailCount - 1) {
-          vec2 fromHead = surfacePosition - trail.zw;
-          float headDistance = length(fromHead);
-          float contactRadius = mix(10.0, 19.0, speedRatio);
-          float pressure = 1.0 - smoothstep(
-            contactRadius * 0.18,
-            contactRadius,
-            headDistance
-          );
-          float rim = exp(-pow(
-            (headDistance - contactRadius) / (contactRadius * 0.42),
-            2.0
-          ));
-          float forward = dot(fromHead, tangent);
-          float bowBias = mix(
-            0.72,
-            1.22,
-            smoothstep(-contactRadius, contactRadius, forward)
-          );
-          float headAmplitude = mix(1.2, 4.2, speedRatio) *
-            exp(-age * 12.0);
-          pointerWave += (rim - pressure * 0.42) *
-            headAmplitude * bowBias;
-        }
       }
 
-      return 4.5 * tanh(pointerWave / 4.5);
+      float pointerSpeed = length(uPointer.zw);
+      float pointerSpeedRatio = clamp(pointerSpeed / 16.0, 0.0, 1.0);
+      float contactRadius = mix(9.0, 15.0, pointerSpeedRatio);
+      float contactDistance = length(surfacePosition - uPointer.xy);
+      float pressure = 1.0 - smoothstep(
+        contactRadius * 0.12,
+        contactRadius,
+        contactDistance
+      );
+      float rim = exp(-pow(
+        (contactDistance - contactRadius) / (contactRadius * 0.3),
+        2.0
+      ));
+      float contactAmplitude = mix(0.72, 1.35, pointerSpeedRatio);
+      pointerWave += (rim * 0.64 - pressure * 0.48) *
+        contactAmplitude * uPointerPresence;
+
+      return 3.2 * tanh(pointerWave / 3.2);
     }
 
     float getSurfaceHeight(vec2 planePosition, vec2 uv) {
@@ -565,6 +543,14 @@ const { totalRecords } = Astro.props;
     private trailCoordinates = new Float32Array(MAX_TRAILS * 4);
     private trailMotion = new Float32Array(MAX_TRAILS * 4);
     private previousPointer: PointerPosition | null = null;
+    private trailAnchor: PointerPosition | null = null;
+    private pointerTarget: { x: number; y: number } | null = null;
+    private pointerPosition = new Float32Array(2);
+    private pointerVelocity = new Float32Array(2);
+    private pointerTargetVelocity = new Float32Array(2);
+    private pointerPresence = 0;
+    private pointerInitialized = false;
+    private lastInteractionAt = performance.now();
     private touchStart: TouchStart | null = null;
     private uniforms: Record<string, WebGLUniformLocation | null> = {};
 
@@ -696,6 +682,8 @@ const { totalRecords } = Astro.props;
         "uSurfaceSize",
         "uRippleRadius",
         "uTrailCount",
+        "uPointer",
+        "uPointerPresence",
       ];
       names.forEach(name => {
         this.uniforms[name] =
@@ -880,6 +868,59 @@ const { totalRecords } = Astro.props;
       this.gl.uniform1i(this.uniforms.uTrailCount, this.trails.length);
       this.gl.uniform4fv(this.uniforms.uTrails, this.trailCoordinates);
       this.gl.uniform4fv(this.uniforms.uTrailMotion, this.trailMotion);
+      this.gl.uniform4f(
+        this.uniforms.uPointer,
+        this.pointerPosition[0],
+        this.pointerPosition[1],
+        this.pointerVelocity[0],
+        this.pointerVelocity[1]
+      );
+      this.gl.uniform1f(this.uniforms.uPointerPresence, this.pointerPresence);
+    }
+
+    private updatePointer(now: number) {
+      const deltaTime = clamp((now - this.lastInteractionAt) / 1000, 0, 0.05);
+      this.lastInteractionAt = now;
+
+      const presenceTarget = this.pointerTarget ? 1 : 0;
+      const presenceResponse = presenceTarget ? 18 : 7;
+      const presenceBlend = 1 - Math.exp(-deltaTime * presenceResponse);
+      this.pointerPresence +=
+        (presenceTarget - this.pointerPresence) * presenceBlend;
+
+      if (this.pointerTarget) {
+        if (!this.pointerInitialized) {
+          this.pointerPosition.set([
+            this.pointerTarget.x,
+            this.pointerTarget.y,
+          ]);
+          this.pointerInitialized = true;
+        }
+
+        const positionBlend = 1 - Math.exp(-deltaTime * 20);
+        this.pointerPosition[0] +=
+          (this.pointerTarget.x - this.pointerPosition[0]) * positionBlend;
+        this.pointerPosition[1] +=
+          (this.pointerTarget.y - this.pointerPosition[1]) * positionBlend;
+
+        if (this.previousPointer && now - this.previousPointer.time > 72) {
+          const velocityDecay = Math.exp(-deltaTime * 14);
+          this.pointerTargetVelocity[0] *= velocityDecay;
+          this.pointerTargetVelocity[1] *= velocityDecay;
+        }
+      } else {
+        const velocityDecay = Math.exp(-deltaTime * 12);
+        this.pointerTargetVelocity[0] *= velocityDecay;
+        this.pointerTargetVelocity[1] *= velocityDecay;
+      }
+
+      const velocityBlend = 1 - Math.exp(-deltaTime * 12);
+      this.pointerVelocity[0] +=
+        (this.pointerTargetVelocity[0] - this.pointerVelocity[0]) *
+        velocityBlend;
+      this.pointerVelocity[1] +=
+        (this.pointerTargetVelocity[1] - this.pointerVelocity[1]) *
+        velocityBlend;
     }
 
     private draw = (now: number) => {
@@ -893,6 +934,7 @@ const { totalRecords } = Astro.props;
         return;
       }
 
+      this.updatePointer(now);
       this.updateCamera();
       this.gl.viewport(0, 0, this.canvas.width, this.canvas.height);
       this.gl.clear(this.gl.COLOR_BUFFER_BIT | this.gl.DEPTH_BUFFER_BIT);
@@ -968,31 +1010,45 @@ const { totalRecords } = Astro.props;
       position: { x: number; y: number },
       now: number
     ) {
-      const deltaX = position.x - from.x;
-      const deltaY = position.y - from.y;
-      const distance = Math.hypot(deltaX, deltaY);
-      if (distance < 0.8) return false;
-
-      const sampleDuration = now - from.time;
+      const totalDeltaX = position.x - from.x;
+      const totalDeltaY = position.y - from.y;
+      const distance = Math.hypot(totalDeltaX, totalDeltaY);
+      const sampleDuration = Math.max(1, now - from.time);
+      if (distance < 0.75) return false;
       if (
         sampleDuration < TRAIL_SAMPLE_INTERVAL &&
-        distance < TRAIL_FORCE_DISTANCE
+        distance < TRAIL_SAMPLE_DISTANCE
       ) {
         return false;
       }
 
-      const frameDuration = Math.max(4, sampleDuration);
-      this.trails.push({
-        fromX: from.x,
-        fromY: from.y,
-        x: position.x,
-        y: position.y,
-        deltaX,
-        deltaY,
-        createdAt: now,
-        speed: clamp(distance / (frameDuration / 16.667), 0, 20),
-      });
-      if (this.trails.length > MAX_TRAILS) this.trails.shift();
+      const sampleCount = clamp(
+        Math.ceil(distance / TRAIL_SAMPLE_DISTANCE),
+        1,
+        MAX_TRAIL_SAMPLES_PER_MOVE
+      );
+      const speed = clamp(distance / (sampleDuration / 16.667), 0, 20);
+      for (let index = 1; index <= sampleCount; index += 1) {
+        const progress = index / sampleCount;
+        const previousProgress = (index - 1) / sampleCount;
+        const fromX = from.x + totalDeltaX * previousProgress;
+        const fromY = from.y + totalDeltaY * previousProgress;
+        const x = from.x + totalDeltaX * progress;
+        const y = from.y + totalDeltaY * progress;
+        this.trails.push({
+          fromX,
+          fromY,
+          x,
+          y,
+          deltaX: x - fromX,
+          deltaY: y - fromY,
+          createdAt: from.time + sampleDuration * progress,
+          speed,
+        });
+      }
+      if (this.trails.length > MAX_TRAILS) {
+        this.trails.splice(0, this.trails.length - MAX_TRAILS);
+      }
       return true;
     }
 
@@ -1016,13 +1072,29 @@ const { totalRecords } = Astro.props;
       const now = performance.now();
       if (!this.previousPointer) {
         this.previousPointer = { ...position, time: now };
+        this.trailAnchor = { ...position, time: now };
+        this.pointerTarget = position;
         return;
       }
 
-      if (this.addTrail(this.previousPointer, position, now)) {
-        this.previousPointer = { ...position, time: now };
-        this.schedule();
+      const elapsed = Math.max(4, now - this.previousPointer.time);
+      this.pointerTargetVelocity[0] = clamp(
+        (position.x - this.previousPointer.x) / (elapsed / 16.667),
+        -20,
+        20
+      );
+      this.pointerTargetVelocity[1] = clamp(
+        (position.y - this.previousPointer.y) / (elapsed / 16.667),
+        -20,
+        20
+      );
+      this.pointerTarget = position;
+      this.previousPointer = { ...position, time: now };
+
+      if (this.trailAnchor && this.addTrail(this.trailAnchor, position, now)) {
+        this.trailAnchor = { ...position, time: now };
       }
+      this.schedule();
     };
 
     private handlePointerDown = (event: PointerEvent) => {
@@ -1051,7 +1123,7 @@ const { totalRecords } = Astro.props;
 
       const position = this.getPointerPosition(event);
       if (!position) return;
-      const halfSegment = 0.75;
+      const halfSegment = 0.5;
       this.trails.push({
         fromX: position.x - halfSegment,
         fromY: position.y,
@@ -1060,7 +1132,7 @@ const { totalRecords } = Astro.props;
         deltaX: halfSegment * 2,
         deltaY: 0,
         createdAt: now,
-        speed: 8,
+        speed: 5,
       });
       if (this.trails.length > MAX_TRAILS) this.trails.shift();
       this.schedule();
@@ -1077,10 +1149,20 @@ const { totalRecords } = Astro.props;
       const position = this.getPointerPosition(event);
       if (!position) return;
       this.previousPointer = { ...position, time: performance.now() };
+      this.trailAnchor = this.previousPointer;
+      this.pointerTarget = position;
+      this.pointerTargetVelocity.fill(0);
+      if (!this.pointerInitialized) {
+        this.pointerPosition.set([position.x, position.y]);
+        this.pointerInitialized = true;
+      }
     };
 
     private handlePointerLeave = () => {
       this.previousPointer = null;
+      this.trailAnchor = null;
+      this.pointerTarget = null;
+      this.pointerTargetVelocity.fill(0);
     };
 
     private handleVisibility = () => {
@@ -1109,7 +1191,7 @@ const { totalRecords } = Astro.props;
 
     private tick = (now: number) => {
       this.frameId = 0;
-      if (now - this.lastFrameAt >= 32) {
+      if (now - this.lastFrameAt >= 15) {
         this.lastFrameAt = now;
         this.draw(now);
       }

@@ -1,5 +1,8 @@
-// 导入所有 MP4 视频文件
-const videos = import.meta.glob("../data/attachment/**/*.mp4", { eager: true });
+// 导入所有支持的视频文件，确保它们会被 Vite 打包并生成可发布的资源路径
+const videos = import.meta.glob(
+  "../data/attachment/**/*.{mp4,webm,ogg,mov,avi}",
+  { eager: true }
+);
 
 /**
  * 获取视频路径

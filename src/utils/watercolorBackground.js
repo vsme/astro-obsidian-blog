@@ -38,12 +38,12 @@ export function createWatercolorBackground() {
           [60, 105, 146],
         ]
       : [
-          [64, 148, 145],
-          [223, 125, 112],
-          [227, 182, 80],
-          [145, 130, 177],
-          [110, 161, 116],
-          [92, 151, 184],
+          [69, 171, 181],
+          [239, 146, 156],
+          [243, 203, 108],
+          [176, 156, 216],
+          [119, 194, 167],
+          [104, 177, 218],
         ];
     const radius = settings.colorSize * Math.pow(width / 736, 0.7);
     const side = Math.min(640, Math.max(96, Math.ceil(radius * 4.4)));
@@ -106,11 +106,11 @@ export function createWatercolorBackground() {
     context.save();
     context.globalCompositeOperation = "source-over";
     context.globalAlpha = 1;
-    context.fillStyle = dark ? "#142c34" : "#e1eef3";
+    context.fillStyle = dark ? "#142c34" : "#eaf5f8";
     context.fillRect(0, 0, width, height);
     lastDrawnTime = time;
     const { positions: points, appearance: shapes } = flow(time);
-    const opacity = dark ? 0.48 : 0.82;
+    const opacity = dark ? 0.48 : 0.6;
     context.globalCompositeOperation = dark ? "screen" : "source-over";
     points.forEach((point, i) => {
       const s = sprites[i % sprites.length];

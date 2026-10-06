@@ -1,6 +1,8 @@
 import React, { useEffect, useRef } from "react";
+import { createInkPond } from "@/utils/inkPond.js";
 
 interface Props {
+  pond?: boolean;
   image: {
     src: string;
     width: number;
@@ -534,17 +536,27 @@ const createProgram = (
   return program;
 };
 
-const DisintegrationImg: React.FC<Props> = ({ image }) => {
+const DisintegrationImg: React.FC<Props> = ({ image, pond = false }) => {
   const imgRef = useRef<HTMLImageElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const pondRef = useRef<HTMLCanvasElement>(null);
+  const pondViewportRef = useRef<HTMLDivElement>(null);
+  const surfaceRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const img = imgRef.current;
+    const img = pond ? pondRef.current : imgRef.current;
     const canvas = canvasRef.current;
     const container = containerRef.current;
     if (!img || !canvas || !container) return;
 
+    const pondScene =
+      pond && img instanceof HTMLCanvasElement
+        ? createInkPond(img, container, pondViewportRef.current)
+        : null;
+    const sourceReady = () =>
+      img instanceof HTMLCanvasElement ||
+      (img.complete && img.naturalWidth > 0);
     const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
     const gl = canvas.getContext("webgl2", {
       alpha: true,
@@ -556,7 +568,14 @@ const DisintegrationImg: React.FC<Props> = ({ image }) => {
     });
     if (!gl) {
       img.style.opacity = "1";
-      return;
+      document.addEventListener("astro:before-swap", stopPond, { once: true });
+      function stopPond() {
+        pondScene?.destroy();
+      }
+      return () => {
+        stopPond();
+        document.removeEventListener("astro:before-swap", stopPond);
+      };
     }
 
     let introProgram: WebGLProgram | null = null;
@@ -577,9 +596,15 @@ const DisintegrationImg: React.FC<Props> = ({ image }) => {
     let bleed = 0;
     let surfaceWidth = 0;
     let surfaceHeight = 0;
+    let surfaceViewportWidth = 0;
+    let surfaceOffsetLeft = 0;
     let canvasVisible = false;
     let resourcesReady = false;
     let disposed = false;
+    let inView = true;
+    let lastPaintedAt = 0;
+    let uploadedWidth = 0;
+    let uploadedHeight = 0;
     const clockStartedAt = performance.now();
     const trails: Trail[] = [];
     const trailCoordinates = new Float32Array(MAX_TRAILS * 4);
@@ -599,7 +624,7 @@ const DisintegrationImg: React.FC<Props> = ({ image }) => {
       canvas.style.opacity = "1";
       // The animated canvas replaces the image only during the intro. During
       // pointer interaction the intact image remains as a safe underlay.
-      img.style.opacity = mode === "intro" ? "0" : "1";
+      img.style.opacity = pond || mode === "intro" ? "0" : "1";
     };
 
     const prepareIntro = () => {
@@ -667,6 +692,8 @@ const DisintegrationImg: React.FC<Props> = ({ image }) => {
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
       gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
+      uploadedWidth = img.width;
+      uploadedHeight = img.height;
 
       introProgram = nextIntroProgram;
       texture = nextTexture;
@@ -720,7 +747,9 @@ const DisintegrationImg: React.FC<Props> = ({ image }) => {
     };
 
     const updateSurface = () => {
-      const bounds = container.getBoundingClientRect();
+      const bounds = pond
+        ? img.getBoundingClientRect()
+        : container.getBoundingClientRect();
       if (bounds.width <= 0 || bounds.height <= 0) return false;
 
       width = Math.max(1, Math.round(bounds.width));
@@ -736,13 +765,33 @@ const DisintegrationImg: React.FC<Props> = ({ image }) => {
       surfaceWidth = width + bleed * 2;
       surfaceHeight = height + bleed * 2;
 
-      canvas.width = surfaceWidth;
-      canvas.height = surfaceHeight;
+      const dpr = Math.min(
+        window.devicePixelRatio || 1,
+        2,
+        Math.sqrt(1600000 / (surfaceWidth * surfaceHeight))
+      );
+      canvas.width = Math.round(surfaceWidth * dpr);
+      canvas.height = Math.round(surfaceHeight * dpr);
       canvas.style.width = `${surfaceWidth}px`;
       canvas.style.height = `${surfaceHeight}px`;
-      canvas.style.left = `${-bleed}px`;
-      canvas.style.top = `${-bleed}px`;
-      gl.viewport(0, 0, surfaceWidth, surfaceHeight);
+      const surface = surfaceRef.current;
+      if (pond && surface) {
+        // Keep the original bleed outside the rounded pond. Only the browser
+        // viewport clips the water, so its off-screen pixels cannot add a scrollbar.
+        const containerBounds = container.getBoundingClientRect();
+        surfaceViewportWidth = document.documentElement.clientWidth;
+        surfaceOffsetLeft = bounds.left;
+        surface.style.left = `${-containerBounds.left}px`;
+        surface.style.top = `${bounds.top - containerBounds.top - bleed}px`;
+        surface.style.width = `${surfaceViewportWidth}px`;
+        surface.style.height = `${surfaceHeight}px`;
+        canvas.style.left = `${bounds.left - bleed}px`;
+        canvas.style.top = "0";
+      } else {
+        canvas.style.left = `${-bleed}px`;
+        canvas.style.top = `${-bleed}px`;
+      }
+      gl.viewport(0, 0, canvas.width, canvas.height);
       return true;
     };
 
@@ -768,7 +817,7 @@ const DisintegrationImg: React.FC<Props> = ({ image }) => {
         return false;
       }
 
-      gl.viewport(0, 0, surfaceWidth, surfaceHeight);
+      gl.viewport(0, 0, canvas.width, canvas.height);
       gl.disable(gl.DEPTH_TEST);
       gl.enable(gl.BLEND);
       gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
@@ -777,6 +826,32 @@ const DisintegrationImg: React.FC<Props> = ({ image }) => {
       gl.bindVertexArray(vertexArray);
       gl.activeTexture(gl.TEXTURE0);
       gl.bindTexture(gl.TEXTURE_2D, texture);
+      // Feed the live fish drawing into the original ripple/intro shaders.
+      // Resizing allocates a new texture; ordinary frames reuse its storage.
+      if (pond) {
+        if (uploadedWidth !== img.width || uploadedHeight !== img.height) {
+          gl.texImage2D(
+            gl.TEXTURE_2D,
+            0,
+            gl.RGBA,
+            gl.RGBA,
+            gl.UNSIGNED_BYTE,
+            img
+          );
+          uploadedWidth = img.width;
+          uploadedHeight = img.height;
+        } else {
+          gl.texSubImage2D(
+            gl.TEXTURE_2D,
+            0,
+            0,
+            0,
+            gl.RGBA,
+            gl.UNSIGNED_BYTE,
+            img
+          );
+        }
+      }
       uploadTrails();
 
       if (mode === "intro") {
@@ -815,12 +890,31 @@ const DisintegrationImg: React.FC<Props> = ({ image }) => {
     };
 
     const scheduleFrame = () => {
-      if (!frameId) frameId = window.requestAnimationFrame(tick);
+      if (
+        !disposed &&
+        inView &&
+        !document.hidden &&
+        !reducedMotion.matches &&
+        !frameId
+      )
+        frameId = window.requestAnimationFrame(tick);
     };
 
     const tick = (now: number) => {
       frameId = 0;
-      if (disposed || document.hidden || mode === "idle") return;
+      if (
+        disposed ||
+        document.hidden ||
+        !inView ||
+        reducedMotion.matches ||
+        mode === "idle"
+      )
+        return;
+      if (pond && now - lastPaintedAt < 1000 / 30) {
+        scheduleFrame();
+        return;
+      }
+      lastPaintedAt = now;
 
       if (mode === "intro" || mode === "interactive") {
         while (trails.length && now - trails[0].createdAt > TRAIL_LIFETIME) {
@@ -860,7 +954,7 @@ const DisintegrationImg: React.FC<Props> = ({ image }) => {
           now - lastInteractionAt <= TRAIL_LIFETIME
         ) {
           mode = "interactive";
-          img.style.opacity = "1";
+          img.style.opacity = pond ? "0" : "1";
           scheduleFrame();
           return;
         }
@@ -871,7 +965,7 @@ const DisintegrationImg: React.FC<Props> = ({ image }) => {
     };
 
     const initialize = () => {
-      if (reducedMotion.matches || document.hidden) {
+      if (reducedMotion.matches || document.hidden || !inView) {
         setIdle();
         return false;
       }
@@ -939,7 +1033,9 @@ const DisintegrationImg: React.FC<Props> = ({ image }) => {
         return;
       }
 
-      const bounds = container.getBoundingClientRect();
+      const bounds = pond
+        ? img.getBoundingClientRect()
+        : container.getBoundingClientRect();
       if (bounds.width <= 0 || bounds.height <= 0) return;
       const scaleX = width / bounds.width;
       const scaleY = height / bounds.height;
@@ -985,12 +1081,7 @@ const DisintegrationImg: React.FC<Props> = ({ image }) => {
     };
 
     const handlePointerDown = (event: PointerEvent) => {
-      if (
-        event.pointerType !== "touch" ||
-        reducedMotion.matches ||
-        !img.complete ||
-        !img.naturalWidth
-      ) {
+      if (reducedMotion.matches || !sourceReady()) {
         return;
       }
       touchStart = {
@@ -1002,7 +1093,7 @@ const DisintegrationImg: React.FC<Props> = ({ image }) => {
     };
 
     const handlePointerUp = (event: PointerEvent) => {
-      if (event.pointerType !== "touch" || !touchStart) return;
+      if (!touchStart || reducedMotion.matches) return;
       const start = touchStart;
       touchStart = null;
       const now = performance.now();
@@ -1022,7 +1113,9 @@ const DisintegrationImg: React.FC<Props> = ({ image }) => {
         return;
       }
 
-      const bounds = container.getBoundingClientRect();
+      const bounds = pond
+        ? img.getBoundingClientRect()
+        : container.getBoundingClientRect();
       if (bounds.width <= 0 || bounds.height <= 0) return;
       const x = (event.clientX - bounds.left) * (width / bounds.width);
       const y = (event.clientY - bounds.top) * (height / bounds.height);
@@ -1048,7 +1141,9 @@ const DisintegrationImg: React.FC<Props> = ({ image }) => {
 
     const handlePointerEnter = (event: PointerEvent) => {
       if (event.pointerType === "touch" || !width || !height) return;
-      const bounds = container.getBoundingClientRect();
+      const bounds = pond
+        ? img.getBoundingClientRect()
+        : container.getBoundingClientRect();
       previousPointer = {
         x: (event.clientX - bounds.left) * (width / bounds.width),
         y: (event.clientY - bounds.top) * (height / bounds.height),
@@ -1068,12 +1163,7 @@ const DisintegrationImg: React.FC<Props> = ({ image }) => {
         return;
       }
 
-      if (
-        !resourcesReady &&
-        !reducedMotion.matches &&
-        img.complete &&
-        img.naturalWidth > 0
-      ) {
+      if (!resourcesReady && !reducedMotion.matches && sourceReady()) {
         startIntro();
       }
     };
@@ -1082,10 +1172,15 @@ const DisintegrationImg: React.FC<Props> = ({ image }) => {
       if (resizeFrameId) return;
       resizeFrameId = window.requestAnimationFrame(() => {
         resizeFrameId = 0;
-        const bounds = container.getBoundingClientRect();
+        const bounds = pond
+          ? img.getBoundingClientRect()
+          : container.getBoundingClientRect();
         if (
           Math.abs(bounds.width - width) < 0.5 &&
-          Math.abs(bounds.height - height) < 0.5
+          Math.abs(bounds.height - height) < 0.5 &&
+          (!pond ||
+            (Math.abs(bounds.left - surfaceOffsetLeft) < 0.5 &&
+              document.documentElement.clientWidth === surfaceViewportWidth))
         ) {
           return;
         }
@@ -1108,7 +1203,7 @@ const DisintegrationImg: React.FC<Props> = ({ image }) => {
     };
 
     const handleContextRestored = () => {
-      if (disposed || !img.complete || !img.naturalWidth) return;
+      if (disposed || !sourceReady()) return;
       try {
         createResources();
         updateSurface();
@@ -1121,6 +1216,19 @@ const DisintegrationImg: React.FC<Props> = ({ image }) => {
       }
     };
 
+    const pause = () => {
+      if (frameId) window.cancelAnimationFrame(frameId);
+      frameId = 0;
+      setIdle();
+    };
+    const handleMotion = () => {
+      pause();
+      if (!reducedMotion.matches && inView && !document.hidden) initialize();
+    };
+    const intersectionObserver = new IntersectionObserver(entries => {
+      inView = entries[0].isIntersecting;
+      if (!inView) pause();
+    });
     const resizeObserver = new ResizeObserver(handleResize);
     const handleLoad = () => startIntro();
 
@@ -1143,19 +1251,28 @@ const DisintegrationImg: React.FC<Props> = ({ image }) => {
     canvas.addEventListener("webglcontextlost", handleContextLost);
     canvas.addEventListener("webglcontextrestored", handleContextRestored);
     document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("resize", handleResize);
     resizeObserver.observe(container);
+    intersectionObserver.observe(container);
+    reducedMotion.addEventListener("change", handleMotion);
 
-    if (img.complete && img.naturalWidth > 0) {
+    if (sourceReady()) {
       startIntro();
     } else {
       img.addEventListener("load", handleLoad, { once: true });
     }
 
-    return () => {
+    const cleanup = () => {
+      if (disposed) return;
       disposed = true;
+      pondScene?.destroy();
+      intersectionObserver.disconnect();
+      reducedMotion.removeEventListener("change", handleMotion);
+      document.removeEventListener("astro:before-swap", cleanup);
       if (frameId) window.cancelAnimationFrame(frameId);
       if (resizeFrameId) window.cancelAnimationFrame(resizeFrameId);
       resizeObserver.disconnect();
+      window.removeEventListener("resize", handleResize);
       destroyResources();
       img.removeEventListener("load", handleLoad);
       container.removeEventListener("pointermove", handlePointerMove);
@@ -1168,30 +1285,68 @@ const DisintegrationImg: React.FC<Props> = ({ image }) => {
       canvas.removeEventListener("webglcontextrestored", handleContextRestored);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, [image.height, image.src, image.width]);
+    document.addEventListener("astro:before-swap", cleanup, { once: true });
+    return cleanup;
+  }, [image.height, image.src, image.width, pond]);
 
   return (
     <div
       ref={containerRef}
       className="relative w-full"
-      style={{ aspectRatio: `${image.width}/${image.height}` }}
+      style={{
+        aspectRatio: `${image.width}/${image.height}`,
+        minHeight: pond ? "220px" : undefined,
+        borderRadius: pond ? "8px" : undefined,
+      }}
     >
-      <img
-        ref={imgRef}
-        src={image.src}
-        width={image.width}
-        height={image.height}
-        decoding="async"
-        draggable={false}
-        className="disintegration-img block h-full w-full dark:brightness-75"
-        alt=""
-      />
-      <canvas
-        ref={canvasRef}
-        className="pointer-events-none absolute z-[1] block dark:brightness-75"
+      {pond ? (
+        <div
+          ref={pondViewportRef}
+          aria-hidden="true"
+          className="pointer-events-none"
+          style={{ position: "absolute", overflow: "clip" }}
+        >
+          <canvas
+            ref={pondRef}
+            className="disintegration-img block h-full w-full"
+            aria-hidden="true"
+            style={{
+              position: "absolute",
+              inset: 0,
+              background: "transparent",
+              pointerEvents: "none",
+            }}
+          />
+        </div>
+      ) : (
+        <img
+          ref={imgRef}
+          src={image.src}
+          width={image.width}
+          height={image.height}
+          decoding="async"
+          draggable={false}
+          className="disintegration-img block h-full w-full dark:brightness-75"
+          alt=""
+        />
+      )}
+      <div
+        ref={surfaceRef}
+        className="pointer-events-none"
         aria-hidden="true"
-        style={{ opacity: 0 }}
-      />
+        style={
+          pond
+            ? { position: "absolute", overflow: "clip", zIndex: 1 }
+            : { display: "contents" }
+        }
+      >
+        <canvas
+          ref={canvasRef}
+          className={`pointer-events-none absolute z-[1] block ${pond ? "" : "dark:brightness-75"}`}
+          aria-hidden="true"
+          style={{ opacity: 0 }}
+        />
+      </div>
     </div>
   );
 };

@@ -4,24 +4,16 @@ title: "关于"
 ---
 
 import DisintegrationImg from "../components/DisintegrationImg.tsx";
-import { Image, getImage } from "astro:assets";
-import aboutWebp from "../data/attachment/blog/about.png";
-
-export const optimizedAbout = await getImage({
-  src: aboutWebp,
-  width: 800,
-  format: "webp",
-  quality: 80,
-});
 
 <figure class="rehype-figure mt-12 mb-16">
   <DisintegrationImg
-    client:idle
+    client:load
+    pond
     image={{
-      src: optimizedAbout.src,
-      width: optimizedAbout.attributes.width,
-      height: optimizedAbout.attributes.height,
-      format: "webp",
+      src: "",
+      width: 1600,
+      height: 396,
+      format: "canvas",
     }}
   />
   {/* <figcaption>🌞🌳🌹🦁🍽️🩸🐆</figcaption> */}

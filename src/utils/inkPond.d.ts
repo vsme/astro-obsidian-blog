@@ -6,6 +6,8 @@ export interface WatercolorSettings {
 }
 export interface InkPondScene {
   destroy(): void;
+  getFrameVersion(): number;
+  subscribeFrame(listener: (now: number) => void): () => void;
   setWatercolorSettings(settings: Partial<WatercolorSettings>): void;
   getState(): {
     watercolor?: WatercolorSettings & {
@@ -28,6 +30,16 @@ export interface InkPondScene {
       x: number;
       y: number;
       active: boolean;
+      reaction: {
+        kind: "none" | "follow" | "dodge" | "scatter";
+        phase: "idle" | "follow" | "wait" | "turn" | "swim" | "coast";
+        active: boolean;
+        drive: number;
+        mix: number;
+        elapsed: number;
+        delay: number;
+        duration: number;
+      };
       speed: number;
       base: number;
       tailDrive: number;
@@ -49,6 +61,7 @@ export interface InkPondScene {
     theme?: string;
     plantRoots?: Array<{ x: number; y: number }>;
     plantClusters?: number;
+    plantCachePixels?: number;
   };
 }
 export function createInkPond(

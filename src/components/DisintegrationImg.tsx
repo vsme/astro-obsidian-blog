@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from "react";
 import { createInkPond } from "@/utils/inkPond.js";
+import { packRippleTrails } from "@/utils/rippleTrails";
 
 interface Props {
   pond?: boolean;
@@ -40,11 +41,11 @@ interface IntroUniforms {
   bleed: WebGLUniformLocation;
   introTime: WebGLUniformLocation;
   introOrigin: WebGLUniformLocation;
-  time: WebGLUniformLocation;
-  radius: WebGLUniformLocation;
   trailCount: WebGLUniformLocation;
   trails: WebGLUniformLocation;
-  trailMotion: WebGLUniformLocation;
+  trailGeometry: WebGLUniformLocation;
+  trailWave: WebGLUniformLocation;
+  headAmplitude: WebGLUniformLocation;
 }
 
 interface RippleUniforms {
@@ -53,11 +54,11 @@ interface RippleUniforms {
   cornerRadii: WebGLUniformLocation;
   surfaceSize: WebGLUniformLocation;
   bleed: WebGLUniformLocation;
-  time: WebGLUniformLocation;
-  radius: WebGLUniformLocation;
   trailCount: WebGLUniformLocation;
   trails: WebGLUniformLocation;
-  trailMotion: WebGLUniformLocation;
+  trailGeometry: WebGLUniformLocation;
+  trailWave: WebGLUniformLocation;
+  headAmplitude: WebGLUniformLocation;
 }
 
 type AnimationMode = "idle" | "intro" | "interactive";
@@ -112,36 +113,35 @@ uniform vec2 uImageSize;
 uniform vec4 uCornerRadii;
 uniform float uIntroTime;
 uniform vec2 uIntroOrigin;
-uniform float uTime;
-uniform float uRadius;
 uniform int uTrailCount;
 uniform vec4 uTrails[MAX_TRAILS];
-uniform vec4 uTrailMotion[MAX_TRAILS];
+uniform vec4 uTrailGeometry[MAX_TRAILS];
+uniform vec4 uTrailWave[MAX_TRAILS];
+uniform float uHeadAmplitude;
 
 in vec2 vUv;
 out vec4 outColor;
 
 vec2 getPointerDistortion(vec2 imagePosition) {
   vec2 pointerDistortion = vec2(0.0);
+  float organic = sin(imagePosition.x * 0.041 + imagePosition.y * 0.057) * 0.55 +
+    sin(imagePosition.x * 0.019 - imagePosition.y * 0.033) * 0.35;
 
   for (int index = 0; index < MAX_TRAILS; index += 1) {
     if (index >= uTrailCount) break;
 
     vec4 trail = uTrails[index];
-    vec4 motion = uTrailMotion[index];
+    vec4 geometry = uTrailGeometry[index];
+    vec4 waveData = uTrailWave[index];
     vec2 segment = trail.zw - trail.xy;
-    float segmentLengthSquared = dot(segment, segment);
-    if (segmentLengthSquared < 0.0001) continue;
-
-    float age = max(0.0, uTime - motion.z);
+    if (geometry.z <= 0.0) continue;
+    float age = geometry.w;
     if (age > ${TRAIL_LIFETIME / 1000}) continue;
 
-    float speedRatio = clamp(motion.w / 20.0, 0.0, 1.0);
-    float segmentLength = sqrt(segmentLengthSquared);
-    vec2 pathTangent = segment / segmentLength;
+    vec2 pathTangent = geometry.xy;
     vec2 relative = imagePosition - trail.xy;
     float projection = clamp(
-      dot(relative, segment) / segmentLengthSquared,
+      dot(relative, segment) * geometry.z,
       0.0,
       1.0
     );
@@ -149,25 +149,8 @@ vec2 getPointerDistortion(vec2 imagePosition) {
     vec2 fromPath = imagePosition - closestPoint;
     float pathDistance = length(fromPath);
     vec2 pathDirection = fromPath / max(pathDistance, 0.001);
-    float growth = clamp(
-      age / ${TRAIL_LIFETIME / 1000},
-      0.0,
-      1.0
-    );
-    float waveRadius = 5.0 + age * uRadius * 0.95;
-    float waveThickness = mix(
-      8.0,
-      19.0,
-      smoothstep(0.0, 1.0, growth)
-    );
-    float waveOffset = pathDistance - waveRadius;
-    float recency = float(index + 1) / max(float(uTrailCount), 1.0);
-    float trailWeight = mix(0.56, 1.0, recency);
-    float life = exp(-age * 2.15) *
-      (1.0 - smoothstep(1.35, ${TRAIL_LIFETIME / 1000}, age));
-    float organic =
-      sin(imagePosition.x * 0.041 + imagePosition.y * 0.057) * 0.55 +
-      sin(imagePosition.x * 0.019 - imagePosition.y * 0.033) * 0.35;
+    float waveThickness = waveData.y;
+    float waveOffset = pathDistance - waveData.x;
     float waveEnvelope = exp(-pow(
       waveOffset / (waveThickness * 1.75),
       2.0
@@ -176,15 +159,14 @@ vec2 getPointerDistortion(vec2 imagePosition) {
       cos(waveOffset * 0.21 + organic * 0.22) +
       cos(waveOffset * 0.105 - organic * 0.15) * 0.22
     ) * waveEnvelope;
-    float wakeAmplitude = mix(1.4, 7.2, speedRatio) *
-      trailWeight * life;
+    float wakeAmplitude = waveData.z;
     pointerDistortion += pathDirection * wave * wakeAmplitude;
 
     if (index == uTrailCount - 1) {
       vec2 fromHead = imagePosition - trail.zw;
       float headDistance = length(fromHead);
       vec2 headDirection = fromHead / max(headDistance, 0.001);
-      float contactRadius = mix(10.0, 19.0, speedRatio);
+      float contactRadius = waveData.w;
       float pressure = 1.0 - smoothstep(
         contactRadius * 0.18,
         contactRadius,
@@ -200,8 +182,7 @@ vec2 getPointerDistortion(vec2 imagePosition) {
         1.22,
         smoothstep(-contactRadius, contactRadius, forward)
       );
-      float headAmplitude = mix(3.2, 10.5, speedRatio) *
-        exp(-age * 12.0);
+      float headAmplitude = uHeadAmplitude;
       pointerDistortion += headDirection * (rim - pressure * 0.42) *
         headAmplitude * bowBias;
       pointerDistortion += pathTangent * pressure * headAmplitude * 0.24;
@@ -341,7 +322,7 @@ void main() {
   vec4 color = texture(uImage, sampleUv);
   float opacity = reveal;
   if (color.a <= 0.001 || opacity <= 0.001) discard;
-  outColor = vec4(color.rgb, color.a * opacity);
+  outColor = color * opacity;
 }
 `;
 
@@ -353,11 +334,11 @@ const int MAX_TRAILS = ${MAX_TRAILS};
 uniform sampler2D uImage;
 uniform vec2 uImageSize;
 uniform vec4 uCornerRadii;
-uniform float uTime;
-uniform float uRadius;
 uniform int uTrailCount;
 uniform vec4 uTrails[MAX_TRAILS];
-uniform vec4 uTrailMotion[MAX_TRAILS];
+uniform vec4 uTrailGeometry[MAX_TRAILS];
+uniform vec4 uTrailWave[MAX_TRAILS];
+uniform float uHeadAmplitude;
 
 in vec2 vUv;
 out vec4 outColor;
@@ -365,25 +346,24 @@ out vec4 outColor;
 void main() {
   vec2 imagePosition = vUv * uImageSize;
   vec2 distortion = vec2(0.0);
+  float organic = sin(imagePosition.x * 0.041 + imagePosition.y * 0.057) * 0.55 +
+    sin(imagePosition.x * 0.019 - imagePosition.y * 0.033) * 0.35;
 
   for (int index = 0; index < MAX_TRAILS; index += 1) {
       if (index >= uTrailCount) break;
 
       vec4 trail = uTrails[index];
-      vec4 motion = uTrailMotion[index];
+      vec4 geometry = uTrailGeometry[index];
+      vec4 waveData = uTrailWave[index];
       vec2 segment = trail.zw - trail.xy;
-      float segmentLengthSquared = dot(segment, segment);
-      if (segmentLengthSquared < 0.0001) continue;
-
-      float age = max(0.0, uTime - motion.z);
+      if (geometry.z <= 0.0) continue;
+      float age = geometry.w;
       if (age > ${TRAIL_LIFETIME / 1000}) continue;
 
-      float speedRatio = clamp(motion.w / 20.0, 0.0, 1.0);
-      float segmentLength = sqrt(segmentLengthSquared);
-      vec2 tangent = segment / segmentLength;
+      vec2 tangent = geometry.xy;
       vec2 relative = imagePosition - trail.xy;
       float projection = clamp(
-        dot(relative, segment) / segmentLengthSquared,
+        dot(relative, segment) * geometry.z,
         0.0,
         1.0
       );
@@ -391,25 +371,8 @@ void main() {
       vec2 fromPath = imagePosition - closestPoint;
       float pathDistance = length(fromPath);
       vec2 pathDirection = fromPath / max(pathDistance, 0.001);
-      float growth = clamp(
-        age / ${TRAIL_LIFETIME / 1000},
-        0.0,
-        1.0
-      );
-      float waveRadius = 5.0 + age * uRadius * 0.95;
-      float waveThickness = mix(
-        8.0,
-        19.0,
-        smoothstep(0.0, 1.0, growth)
-      );
-      float waveOffset = pathDistance - waveRadius;
-      float recency = float(index + 1) / max(float(uTrailCount), 1.0);
-      float trailWeight = mix(0.56, 1.0, recency);
-      float life = exp(-age * 2.15) *
-        (1.0 - smoothstep(1.35, ${TRAIL_LIFETIME / 1000}, age));
-      float organic =
-        sin(imagePosition.x * 0.041 + imagePosition.y * 0.057) * 0.55 +
-        sin(imagePosition.x * 0.019 - imagePosition.y * 0.033) * 0.35;
+      float waveThickness = waveData.y;
+      float waveOffset = pathDistance - waveData.x;
       float waveEnvelope = exp(-pow(
         waveOffset / (waveThickness * 1.75),
         2.0
@@ -418,15 +381,14 @@ void main() {
         cos(waveOffset * 0.21 + organic * 0.22) +
         cos(waveOffset * 0.105 - organic * 0.15) * 0.22
       ) * waveEnvelope;
-      float wakeAmplitude = mix(1.4, 7.2, speedRatio) *
-        trailWeight * life;
+      float wakeAmplitude = waveData.z;
       distortion += pathDirection * wave * wakeAmplitude;
 
       if (index == uTrailCount - 1) {
         vec2 fromHead = imagePosition - trail.zw;
         float headDistance = length(fromHead);
         vec2 headDirection = fromHead / max(headDistance, 0.001);
-        float contactRadius = mix(10.0, 19.0, speedRatio);
+        float contactRadius = waveData.w;
         float pressure = 1.0 - smoothstep(
           contactRadius * 0.18,
           contactRadius,
@@ -442,8 +404,7 @@ void main() {
           1.22,
           smoothstep(-contactRadius, contactRadius, forward)
         );
-        float headAmplitude = mix(3.2, 10.5, speedRatio) *
-          exp(-age * 12.0);
+        float headAmplitude = uHeadAmplitude;
         distortion += headDirection * (rim - pressure * 0.42) *
           headAmplitude * bowBias;
         distortion += tangent * pressure * headAmplitude * 0.24;
@@ -560,6 +521,7 @@ const DisintegrationImg: React.FC<Props> = ({ image, pond = false }) => {
     const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
     const gl = canvas.getContext("webgl2", {
       alpha: true,
+      premultipliedAlpha: true,
       antialias: false,
       depth: false,
       stencil: false,
@@ -586,6 +548,10 @@ const DisintegrationImg: React.FC<Props> = ({ image, pond = false }) => {
     let rippleUniforms: RippleUniforms | null = null;
     let mode: AnimationMode = "idle";
     let frameId = 0;
+    let frameRequested = false;
+    let surfaceResizePending = false;
+    let uploadedVersion = -1;
+    let surfaceDeviceDpr = 0;
     let resizeFrameId = 0;
     let introStartedAt = 0;
     let lastInteractionAt = 0;
@@ -605,10 +571,10 @@ const DisintegrationImg: React.FC<Props> = ({ image, pond = false }) => {
     let lastPaintedAt = 0;
     let uploadedWidth = 0;
     let uploadedHeight = 0;
-    const clockStartedAt = performance.now();
     const trails: Trail[] = [];
     const trailCoordinates = new Float32Array(MAX_TRAILS * 4);
-    const trailMotion = new Float32Array(MAX_TRAILS * 4);
+    const trailGeometry = new Float32Array(MAX_TRAILS * 4);
+    const trailWave = new Float32Array(MAX_TRAILS * 4);
     const cornerRadii = new Float32Array(4);
     const introOrigin = new Float32Array([Math.random(), Math.random()]);
 
@@ -636,6 +602,7 @@ const DisintegrationImg: React.FC<Props> = ({ image, pond = false }) => {
 
     const setIdle = () => {
       mode = "idle";
+      frameRequested = false;
       trails.length = 0;
       previousPointer = null;
       touchStart = null;
@@ -687,6 +654,7 @@ const DisintegrationImg: React.FC<Props> = ({ image, pond = false }) => {
       gl.activeTexture(gl.TEXTURE0);
       gl.bindTexture(gl.TEXTURE_2D, nextTexture);
       gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, 0);
+      gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, 1);
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
@@ -694,6 +662,7 @@ const DisintegrationImg: React.FC<Props> = ({ image, pond = false }) => {
       gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
       uploadedWidth = img.width;
       uploadedHeight = img.height;
+      uploadedVersion = pondScene?.getFrameVersion() ?? -1;
 
       introProgram = nextIntroProgram;
       texture = nextTexture;
@@ -706,11 +675,11 @@ const DisintegrationImg: React.FC<Props> = ({ image, pond = false }) => {
         bleed: getUniform(nextIntroProgram, "uBleed"),
         introTime: getUniform(nextIntroProgram, "uIntroTime"),
         introOrigin: getUniform(nextIntroProgram, "uIntroOrigin"),
-        time: getUniform(nextIntroProgram, "uTime"),
-        radius: getUniform(nextIntroProgram, "uRadius"),
         trailCount: getUniform(nextIntroProgram, "uTrailCount"),
         trails: getUniform(nextIntroProgram, "uTrails[0]"),
-        trailMotion: getUniform(nextIntroProgram, "uTrailMotion[0]"),
+        trailGeometry: getUniform(nextIntroProgram, "uTrailGeometry[0]"),
+        trailWave: getUniform(nextIntroProgram, "uTrailWave[0]"),
+        headAmplitude: getUniform(nextIntroProgram, "uHeadAmplitude"),
       };
 
       try {
@@ -726,11 +695,11 @@ const DisintegrationImg: React.FC<Props> = ({ image, pond = false }) => {
           cornerRadii: getUniform(nextRippleProgram, "uCornerRadii"),
           surfaceSize: getUniform(nextRippleProgram, "uSurfaceSize"),
           bleed: getUniform(nextRippleProgram, "uBleed"),
-          time: getUniform(nextRippleProgram, "uTime"),
-          radius: getUniform(nextRippleProgram, "uRadius"),
           trailCount: getUniform(nextRippleProgram, "uTrailCount"),
           trails: getUniform(nextRippleProgram, "uTrails[0]"),
-          trailMotion: getUniform(nextRippleProgram, "uTrailMotion[0]"),
+          trailGeometry: getUniform(nextRippleProgram, "uTrailGeometry[0]"),
+          trailWave: getUniform(nextRippleProgram, "uTrailWave[0]"),
+          headAmplitude: getUniform(nextRippleProgram, "uHeadAmplitude"),
         };
       } catch (error) {
         if (rippleProgram) gl.deleteProgram(rippleProgram);
@@ -765,6 +734,7 @@ const DisintegrationImg: React.FC<Props> = ({ image, pond = false }) => {
       surfaceWidth = width + bleed * 2;
       surfaceHeight = height + bleed * 2;
 
+      surfaceDeviceDpr = window.devicePixelRatio || 1;
       const dpr = Math.min(
         window.devicePixelRatio || 1,
         2,
@@ -795,23 +765,6 @@ const DisintegrationImg: React.FC<Props> = ({ image, pond = false }) => {
       return true;
     };
 
-    const uploadTrails = () => {
-      trailCoordinates.fill(0);
-      trailMotion.fill(0);
-
-      trails.forEach((trail, index) => {
-        const offset = index * 4;
-        trailCoordinates[offset] = trail.fromX;
-        trailCoordinates[offset + 1] = trail.fromY;
-        trailCoordinates[offset + 2] = trail.x;
-        trailCoordinates[offset + 3] = trail.y;
-        trailMotion[offset] = trail.deltaX;
-        trailMotion[offset + 1] = trail.deltaY;
-        trailMotion[offset + 2] = (trail.createdAt - clockStartedAt) / 1000;
-        trailMotion[offset + 3] = trail.speed;
-      });
-    };
-
     const renderFrame = (now: number) => {
       if (!resourcesReady || !texture || !vertexArray || gl.isContextLost()) {
         return false;
@@ -820,7 +773,14 @@ const DisintegrationImg: React.FC<Props> = ({ image, pond = false }) => {
       gl.viewport(0, 0, canvas.width, canvas.height);
       gl.disable(gl.DEPTH_TEST);
       gl.enable(gl.BLEND);
-      gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+      // Upload, filtering, shader fades, and composition all use premultiplied
+      // RGBA. Transparent black cannot darken the paper or fish at texture edges.
+      gl.blendFuncSeparate(
+        gl.ONE,
+        gl.ONE_MINUS_SRC_ALPHA,
+        gl.ONE,
+        gl.ONE_MINUS_SRC_ALPHA
+      );
       gl.clearColor(0, 0, 0, 0);
       gl.clear(gl.COLOR_BUFFER_BIT);
       gl.bindVertexArray(vertexArray);
@@ -828,7 +788,13 @@ const DisintegrationImg: React.FC<Props> = ({ image, pond = false }) => {
       gl.bindTexture(gl.TEXTURE_2D, texture);
       // Feed the live fish drawing into the original ripple/intro shaders.
       // Resizing allocates a new texture; ordinary frames reuse its storage.
-      if (pond) {
+      const sourceVersion = pondScene?.getFrameVersion() ?? -1;
+      if (
+        pond &&
+        (sourceVersion !== uploadedVersion ||
+          uploadedWidth !== img.width ||
+          uploadedHeight !== img.height)
+      ) {
         if (uploadedWidth !== img.width || uploadedHeight !== img.height) {
           gl.texImage2D(
             gl.TEXTURE_2D,
@@ -852,7 +818,16 @@ const DisintegrationImg: React.FC<Props> = ({ image, pond = false }) => {
           );
         }
       }
-      uploadTrails();
+      uploadedVersion = sourceVersion;
+      const headAmplitude = packRippleTrails(
+        trails,
+        now,
+        clamp(width * 0.13, 58, 96),
+        trailCoordinates,
+        trailGeometry,
+        trailWave,
+        TRAIL_LIFETIME / 1000
+      );
 
       if (mode === "intro") {
         if (!introProgram || !introUniforms) return false;
@@ -864,11 +839,11 @@ const DisintegrationImg: React.FC<Props> = ({ image, pond = false }) => {
         gl.uniform1f(introUniforms.bleed, bleed);
         gl.uniform1f(introUniforms.introTime, (now - introStartedAt) / 1000);
         gl.uniform2fv(introUniforms.introOrigin, introOrigin);
-        gl.uniform1f(introUniforms.time, (now - clockStartedAt) / 1000);
-        gl.uniform1f(introUniforms.radius, clamp(width * 0.13, 58, 96));
         gl.uniform1i(introUniforms.trailCount, trails.length);
         gl.uniform4fv(introUniforms.trails, trailCoordinates);
-        gl.uniform4fv(introUniforms.trailMotion, trailMotion);
+        gl.uniform4fv(introUniforms.trailGeometry, trailGeometry);
+        gl.uniform4fv(introUniforms.trailWave, trailWave);
+        gl.uniform1f(introUniforms.headAmplitude, headAmplitude);
         gl.drawArrays(gl.TRIANGLES, 0, 6);
       } else {
         if (!rippleProgram || !rippleUniforms) return false;
@@ -878,11 +853,11 @@ const DisintegrationImg: React.FC<Props> = ({ image, pond = false }) => {
         gl.uniform4fv(rippleUniforms.cornerRadii, cornerRadii);
         gl.uniform2f(rippleUniforms.surfaceSize, surfaceWidth, surfaceHeight);
         gl.uniform1f(rippleUniforms.bleed, bleed);
-        gl.uniform1f(rippleUniforms.time, (now - clockStartedAt) / 1000);
-        gl.uniform1f(rippleUniforms.radius, clamp(width * 0.13, 58, 96));
         gl.uniform1i(rippleUniforms.trailCount, trails.length);
         gl.uniform4fv(rippleUniforms.trails, trailCoordinates);
-        gl.uniform4fv(rippleUniforms.trailMotion, trailMotion);
+        gl.uniform4fv(rippleUniforms.trailGeometry, trailGeometry);
+        gl.uniform4fv(rippleUniforms.trailWave, trailWave);
+        gl.uniform1f(rippleUniforms.headAmplitude, headAmplitude);
         gl.drawArrays(gl.TRIANGLES, 0, 6);
       }
       gl.bindVertexArray(null);
@@ -890,18 +865,15 @@ const DisintegrationImg: React.FC<Props> = ({ image, pond = false }) => {
     };
 
     const scheduleFrame = () => {
-      if (
-        !disposed &&
-        inView &&
-        !document.hidden &&
-        !reducedMotion.matches &&
-        !frameId
-      )
-        frameId = window.requestAnimationFrame(tick);
+      if (disposed || !inView || document.hidden || reducedMotion.matches)
+        return;
+      if (pondScene) frameRequested = true;
+      else if (!frameId) frameId = window.requestAnimationFrame(tick);
     };
 
     const tick = (now: number) => {
       frameId = 0;
+      frameRequested = false;
       if (
         disposed ||
         document.hidden ||
@@ -910,7 +882,7 @@ const DisintegrationImg: React.FC<Props> = ({ image, pond = false }) => {
         mode === "idle"
       )
         return;
-      if (pond && now - lastPaintedAt < 1000 / 30) {
+      if (!pondScene && pond && now - lastPaintedAt < 1000 / 30) {
         scheduleFrame();
         return;
       }
@@ -1168,26 +1140,34 @@ const DisintegrationImg: React.FC<Props> = ({ image, pond = false }) => {
       }
     };
 
+    const updateResizedSurface = () => {
+      surfaceResizePending = false;
+      const bounds = pond
+        ? img.getBoundingClientRect()
+        : container.getBoundingClientRect();
+      if (
+        Math.abs(bounds.width - width) < 0.5 &&
+        Math.abs(bounds.height - height) < 0.5 &&
+        (window.devicePixelRatio || 1) === surfaceDeviceDpr &&
+        (!pond ||
+          (Math.abs(bounds.left - surfaceOffsetLeft) < 0.5 &&
+            document.documentElement.clientWidth === surfaceViewportWidth))
+      )
+        return;
+      if (frameId) window.cancelAnimationFrame(frameId);
+      frameId = 0;
+      if (!updateSurface()) failSafe();
+      setIdle();
+    };
     const handleResize = () => {
+      if (pondScene) {
+        surfaceResizePending = true;
+        return;
+      }
       if (resizeFrameId) return;
       resizeFrameId = window.requestAnimationFrame(() => {
         resizeFrameId = 0;
-        const bounds = pond
-          ? img.getBoundingClientRect()
-          : container.getBoundingClientRect();
-        if (
-          Math.abs(bounds.width - width) < 0.5 &&
-          Math.abs(bounds.height - height) < 0.5 &&
-          (!pond ||
-            (Math.abs(bounds.left - surfaceOffsetLeft) < 0.5 &&
-              document.documentElement.clientWidth === surfaceViewportWidth))
-        ) {
-          return;
-        }
-        if (frameId) window.cancelAnimationFrame(frameId);
-        frameId = 0;
-        if (!updateSurface()) failSafe();
-        setIdle();
+        updateResizedSurface();
       });
     };
 
@@ -1256,6 +1236,18 @@ const DisintegrationImg: React.FC<Props> = ({ image, pond = false }) => {
     intersectionObserver.observe(container);
     reducedMotion.addEventListener("change", handleMotion);
 
+    const unsubscribeFrame = pondScene?.subscribeFrame(now => {
+      if (disposed) return;
+      try {
+        if (surfaceResizePending) updateResizedSurface();
+        if (frameRequested) tick(now);
+      } catch (error) {
+        if (import.meta.env.DEV) {
+          console.warn("[DisintegrationImg] shared frame failed", error);
+        }
+        failSafe();
+      }
+    });
     if (sourceReady()) {
       startIntro();
     } else {
@@ -1265,6 +1257,8 @@ const DisintegrationImg: React.FC<Props> = ({ image, pond = false }) => {
     const cleanup = () => {
       if (disposed) return;
       disposed = true;
+      frameRequested = false;
+      unsubscribeFrame?.();
       pondScene?.destroy();
       intersectionObserver.disconnect();
       reducedMotion.removeEventListener("change", handleMotion);

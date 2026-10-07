@@ -30,21 +30,22 @@ const smooth = (lo, hi, value) => {
   const t = clamp((value - lo) / (hi - lo), 0, 1);
   return t * t * (3 - 2 * t);
 };
+// Muted washes keep the fish legible without greying the blue-green paper.
 const LIGHT = [
-  [69, 171, 181],
-  [239, 146, 156],
-  [243, 203, 108],
-  [176, 156, 216],
-  [119, 194, 167],
-  [104, 177, 218],
+  [100, 162, 169],
+  [218, 154, 163],
+  [230, 201, 145],
+  [177, 161, 200],
+  [141, 183, 165],
+  [132, 174, 199],
 ];
 const DARK = [
-  [44, 110, 123],
-  [146, 73, 101],
-  [127, 106, 56],
-  [82, 80, 133],
-  [51, 119, 96],
-  [60, 105, 146],
+  [58, 108, 119],
+  [131, 80, 102],
+  [119, 104, 65],
+  [87, 84, 124],
+  [66, 114, 98],
+  [75, 106, 137],
 ];
 
 // Six independent pigment fields share one incompressible water flow. Mixing
@@ -128,9 +129,15 @@ export function createPigmentFluid() {
     cssWidth = width;
     cssHeight = height;
     config = { ...settings };
-    const scale = Math.min(192 / width, 96 / height);
-    w = Math.max(32, Math.round(width * scale));
-    h = Math.max(24, Math.round(height * scale));
+    // Bound total work as well as each axis; narrow screens must not simulate
+    // more cells than the desktop simply because their grid is taller.
+    const scale = Math.min(
+      192 / width,
+      96 / height,
+      Math.sqrt(11000 / (width * height))
+    );
+    w = Math.max(32, Math.floor(width * scale + 1e-9));
+    h = Math.max(24, Math.floor(height * scale + 1e-9));
     cells = w * h;
     u = new Float32Array(cells);
     v = new Float32Array(cells);
@@ -528,9 +535,9 @@ export function createPigmentFluid() {
         pixels[out + 1] = paper[1] + (g - paper[1] * mass) * strength;
         pixels[out + 2] = paper[2] + (b - paper[2] * mass) * strength;
       } else {
-        pixels[out] = paper[0] * Math.exp(-r * 0.6);
-        pixels[out + 1] = paper[1] * Math.exp(-g * 0.6);
-        pixels[out + 2] = paper[2] * Math.exp(-b * 0.6);
+        pixels[out] = paper[0] * Math.exp(-r * 0.56);
+        pixels[out + 1] = paper[1] * Math.exp(-g * 0.56);
+        pixels[out + 2] = paper[2] * Math.exp(-b * 0.56);
       }
       pixels[out + 3] = 255;
     }

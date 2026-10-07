@@ -118,7 +118,7 @@ export function createInkPond(canvas, container, viewportMask = null) {
     makeBackground();
     makePlants();
   }
-  // Cache each watercolor pigment once; ordinary frames only move its canvas.
+  // The pigment simulation shares the host's clock and one small backing canvas.
   function makeBackground() {
     background.rebuild(W, H, dark);
   }

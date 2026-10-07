@@ -10,9 +10,13 @@ export interface InkPondScene {
   getState(): {
     watercolor?: WatercolorSettings & {
       positions: Array<{ x: number; y: number }>;
-      spriteCount: number;
+      mode: "fluid";
+      pigmentCount: number;
+      gridWidth: number;
+      gridHeight: number;
+      steps: number;
+      mass: number[];
       cacheCount: number;
-      appearance: Array<{ colorSize: number; mix: number; rotation: number }>;
     };
     time: number;
     paused: boolean;

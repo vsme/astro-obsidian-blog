@@ -27,6 +27,12 @@ export interface InkPondScene {
       speed: number;
       base: number;
       tailDrive: number;
+      steeringEffort: number;
+      turn: number;
+      heading: number;
+      tailPhase: number;
+      tailAmplitude: number;
+      tailSweep: number;
       tailRate: number;
       burstKind: string;
       burstCount: number;

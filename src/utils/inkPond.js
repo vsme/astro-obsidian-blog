@@ -343,8 +343,10 @@ export function createInkPond(canvas, container, viewportMask = null) {
       burstCount: 0,
       turnBursts: 0,
       tailDrive: 0,
-      tailAmplitude: 0.018,
-      tailRate: 2.6 + base * 0.035,
+      steeringEffort: 0,
+      tailAmplitude: 0.022,
+      tailSweep: 0.065,
+      tailRate: 5.5 + base * 0.05,
       pattern: i % 6,
       roaming: i % 10 === 0,
     };
@@ -519,20 +521,29 @@ export function createInkPond(canvas, container, viewportMask = null) {
             : 0;
         f.tailDrive += (envelope - f.tailDrive) * Math.min(1, dt * 16);
         // Longer random bursts add quick beats, then the tail quiets for the glide.
-        const rate = stroking
-          ? (TAU * f.burstBeats) / f.burstDuration
-          : 2.6 + f.v * 0.035;
-        f.tailRate += (rate - f.tailRate) * Math.min(1, dt * 18);
+        if (stroking) {
+          const rate = (TAU * f.burstBeats) / f.burstDuration;
+          f.tailRate += (rate - f.tailRate) * Math.min(1, dt * 18);
+        }
         if (f.burstKind === "turn") target = f.burstHeading;
       }
       const turningBurst = f.variablePace && f.burstKind === "turn",
-        turnLimit = turningBurst ? 4.2 : 1.05,
+        headingError = angleDelta(target, f.a),
+        effort = clamp((Math.abs(headingError) - 0.12) / 0.9, 0, 1);
+      f.steeringEffort += (effort - f.steeringEffort) * Math.min(1, dt * 8);
+      // Ordinary turns are powered by alternating tail strokes too: the head
+      // turns more during each stroke, with a softer glide between strokes.
+      const stroke = 0.55 + 0.45 * Math.pow(Math.sin(f.phase), 2),
+        turnLimit = turningBurst
+          ? 4.2
+          : (1.15 + f.steeringEffort * 0.7) * stroke,
         turn = clamp(
-          angleDelta(target, f.a) * (turningBurst ? 4.8 : 2.2),
+          headingError *
+            (turningBurst ? 4.8 : (2.2 + f.steeringEffort * 0.9) * stroke),
           -turnLimit,
           turnLimit
         );
-      f.turn += (turn - f.turn) * Math.min(1, dt * (turningBurst ? 12 : 5));
+      f.turn += (turn - f.turn) * Math.min(1, dt * (turningBurst ? 12 : 8));
       f.a += f.turn * dt;
       f.bank +=
         (clamp(f.turn * 0.58, -0.61, 0.61) - f.bank) * Math.min(1, dt * 2.7);
@@ -555,11 +566,23 @@ export function createInkPond(canvas, container, viewportMask = null) {
       f.y += Math.sin(f.a) * f.v * dt;
       f.x = clamp(f.x, minX + 6, maxX - 6);
       f.y = clamp(f.y, minY + 6, maxY - 6);
-      const amplitude = f.variablePace ? 0.004 + f.tailDrive * 0.075 : 0.018;
+      const amplitude = f.variablePace
+        ? 0.004 + f.tailDrive * 0.075 + f.steeringEffort * 0.04
+        : 0.022 + f.steeringEffort * 0.045;
       f.tailAmplitude += (amplitude - f.tailAmplitude) * Math.min(1, dt * 12);
+      const sweep = 0.065 + f.steeringEffort * 0.2 + f.tailDrive * 0.2;
+      f.tailSweep += (sweep - f.tailSweep) * Math.min(1, dt * 12);
+      const steeringRate = 5.5 + f.v * 0.05 + f.steeringEffort * 6.5;
       if (!f.variablePace) {
         f.tailDrive *= Math.max(0, 1 - dt * 16);
-        f.tailRate = 2.6 + f.v * 0.035;
+        f.tailRate += (steeringRate - f.tailRate) * Math.min(1, dt * 12);
+      } else if (f.burstKind === "coast") {
+        // Quiet straight glides remain quiet; steering can briefly engage the
+        // tail without assigning another random acceleration event.
+        f.tailRate +=
+          (Math.max(2.6 + f.v * 0.035, steeringRate * f.steeringEffort) -
+            f.tailRate) *
+          Math.min(1, dt * 12);
       }
       f.phase += dt * f.tailRate;
       solveSpine(f);
@@ -782,9 +805,7 @@ export function createInkPond(canvas, container, viewportMask = null) {
     };
     for (let v of geom.fins) if (!v.near) fin(v);
     // Caudal fin is a folded fan in 3D, rooted to the final spinal tangent.
-    let sweep =
-      Math.sin(f.phase - 5.45) *
-      (0.055 + (f.variablePace ? f.tailDrive * 0.2 : 0));
+    let sweep = Math.sin(f.phase - 5.45) * f.tailSweep;
     const tp = (u, z) => surface(f, 1, u * L * Math.sin(sweep), z * L, -u * L);
     let root = tp(0, 0),
       upper = tp(0.215, 0.15),
@@ -1123,6 +1144,12 @@ export function createInkPond(canvas, container, viewportMask = null) {
         speed: f.v,
         base: f.base,
         tailDrive: f.tailDrive,
+        steeringEffort: f.steeringEffort,
+        turn: f.turn,
+        heading: f.a,
+        tailPhase: f.phase,
+        tailAmplitude: f.tailAmplitude,
+        tailSweep: f.tailSweep,
         tailRate: f.tailRate,
         burstKind: f.burstKind,
         burstCount: f.burstCount,

@@ -243,7 +243,7 @@ const mapData = JSON.stringify(locations).replace(/</g, "\\u003c");
   import { createElement } from "react";
   import { createRoot, type Root } from "react-dom/client";
   import { SUPABASE_KEY, SUPABASE_URL } from "astro:env/client";
-  import EmojiReactions from "@/components/EmojiReactions";
+  import DiaryComments from "@/components/DiaryComments";
   import { getFootprintReactionId } from "@/utils/footprintReactions";
 
   type LocationData = {
@@ -870,8 +870,8 @@ const mapData = JSON.stringify(locations).replace(/</g, "\\u003c");
         const root = createRoot(reactions);
         reactionRoots.set(reactions, root);
         root.render(
-          createElement(EmojiReactions, {
-            id: getFootprintReactionId(record.id),
+          createElement(DiaryComments, {
+            contentId: getFootprintReactionId(record.id),
             menuAlign: "contained",
           })
         );
@@ -1505,6 +1505,7 @@ const mapData = JSON.stringify(locations).replace(/</g, "\\u003c");
 
   .footprints-map-shell {
     position: relative;
+    isolation: isolate;
     overflow: clip;
     border-radius: 1.25rem;
   }

@@ -5,6 +5,7 @@ import {
   useRef,
   useState,
   type FormEvent,
+  type ComponentProps,
 } from "react";
 import { createPortal } from "react-dom";
 import { LoaderCircle, X } from "lucide-react";
@@ -29,7 +30,13 @@ import {
   countCharacters,
 } from "../utils/commentRules.mjs";
 
-export default function DiaryComments({ contentId }: { contentId: string }) {
+export default function DiaryComments({
+  contentId,
+  menuAlign = "auto",
+}: {
+  contentId: string;
+  menuAlign?: ComponentProps<typeof EmojiReactions>["menuAlign"];
+}) {
   const uid = useId();
   const root = useRef<HTMLDivElement>(null),
     form = useRef<HTMLFormElement>(null),
@@ -145,7 +152,7 @@ export default function DiaryComments({ contentId }: { contentId: string }) {
     const observer = new IntersectionObserver(
       entries => {
         if (entries.some(entry => entry.isIntersecting)) {
-          observer.disconnect();
+          // Restore updated caches when switching between footprint views.
           load();
         }
       },
@@ -284,6 +291,7 @@ export default function DiaryComments({ contentId }: { contentId: string }) {
         id={contentId}
         inline
         data={emojiData}
+        menuAlign={menuAlign}
         afterMenu={
           <span className="relative inline-flex shrink-0">
             <button
@@ -420,7 +428,7 @@ export default function DiaryComments({ contentId }: { contentId: string }) {
                     aria-invalid={nicknameCount > NICKNAME_LIMIT}
                     aria-label="昵称（选填）"
                     className="mt-1 w-full rounded-md border border-border bg-background px-2 py-1.5 font-sans text-xs outline-none placeholder:text-foreground/45 focus:border-accent disabled:opacity-60 aria-invalid:border-red-400"
-                    placeholder="不填就是访客"
+                    placeholder="默认匿名"
                   />
                 </label>
                 <label className="min-w-0 text-[10px] text-foreground/70">

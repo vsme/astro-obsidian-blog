@@ -75,12 +75,17 @@ export default function DiaryCommentChip({
     onDismiss: () => setConfirming(false),
   });
   async function interact() {
-    if (comment.isOwn) {
+    if (comment.isOwn && comment.status === "pending") {
       onRequestRemove();
       setConfirming(true);
       return;
     }
     const result = await onReact();
+    if (result?.requires_delete_confirmation && alive.current) {
+      onRequestRemove();
+      setConfirming(true);
+      return;
+    }
     if (result && alive.current)
       setPulse({
         text: result.is_active ? "+1" : "−1",
@@ -91,8 +96,16 @@ export default function DiaryCommentChip({
     const success = await onRemove();
     if (success && alive.current) setConfirming(false);
   }
-  const count = comment.interaction_count ?? 0;
-  const active = comment.isOwn || comment.has_reacted;
+  const otherCount = comment.interaction_count ?? 0;
+  const participantCount = Number(comment.author_participating) + otherCount;
+  const active = comment.isOwn
+    ? comment.author_participating
+    : comment.has_reacted;
+  const deleteAvailable =
+    comment.isOwn && comment.author_participating && otherCount === 0;
+  useEffect(() => {
+    if (!deleteAvailable) setConfirming(false);
+  }, [deleteAvailable]);
   return (
     <span
       className={`relative inline-flex max-w-full ${entering && entryWidth !== null ? "diary-comment-enter" : ""}`}
@@ -113,18 +126,24 @@ export default function DiaryCommentChip({
         ref={anchor}
         type="button"
         aria-label={
-          comment.isOwn
+          deleteAvailable
             ? `撤回自己的评论：${comment.message || comment.emoji}`
-            : `${comment.has_reacted ? "取消互动" : "为评论加一"}：${comment.message || comment.emoji}`
+            : comment.isOwn
+              ? `${comment.author_participating ? "取消我的参与" : "恢复我的参与"}：${comment.message || comment.emoji}`
+              : `${comment.has_reacted ? "取消互动" : "为评论加一"}：${comment.message || comment.emoji}`
         }
         aria-pressed={Boolean(active)}
         disabled={removing || reacting}
         title={
-          comment.isOwn
+          deleteAvailable
             ? "点击确认撤回你的评论"
-            : comment.has_reacted
-              ? "再次点击取消互动"
-              : "为这条评论加一"
+            : comment.isOwn
+              ? comment.author_participating
+                ? "取消我的参与，保留评论"
+                : "恢复我的参与"
+              : comment.has_reacted
+                ? "再次点击取消互动"
+                : "为这条评论加一"
         }
         onClick={() => void interact()}
         className={`inline-flex max-w-full items-center gap-1.5 rounded-full border px-2 py-1 text-xs leading-4 transition-colors disabled:cursor-wait disabled:opacity-60 ${active ? "border-accent/40 bg-accent/10 hover:bg-accent/15" : "border-border bg-background hover:border-accent/40 hover:bg-accent/5"}`}
@@ -162,7 +181,8 @@ export default function DiaryCommentChip({
         ) : null}
       </button>
       <InteractionFeedback
-        count={count}
+        count={participantCount}
+        countLabel="人参与"
         pulse={pulse}
         onPulseEnd={key =>
           setPulse(current => (current?.key === key ? null : current))

@@ -24,10 +24,13 @@ export interface DiaryComment {
   status?: "approved" | "pending";
   interaction_count?: number;
   has_reacted?: boolean;
+  author_participating: boolean;
 }
 export interface DiaryCommentReaction {
   interaction_count: number;
   is_active: boolean;
+  author_participating: boolean;
+  requires_delete_confirmation: boolean;
 }
 type RateAction = "submit" | "react";
 export interface DiaryCommentCooldown {
@@ -87,7 +90,7 @@ function rememberCooldown(
 }
 const emojiErrors = new Map<string, string>();
 const COMMENT_CACHE_TTL_MS = 5 * 60 * 1000;
-const COMMENT_CACHE_PREFIX = "astro-paper:diary-comments:v1";
+const COMMENT_CACHE_PREFIX = "astro-paper:diary-comments:v2";
 type CommentCacheEntry = { expiresAt: number; rows: DiaryComment[] };
 const cache = new Map<string, CommentCacheEntry>();
 let mutationVersion = 0;
@@ -123,6 +126,8 @@ function cacheKey(scope: string, id: string) {
   return `${COMMENT_CACHE_PREFIX}:${encodeURIComponent(scope)}:${id}`;
 }
 function projectComment(row: DiaryComment): DiaryComment {
+  if (typeof row.author_participating !== "boolean")
+    throw new Error("评论互动暂时不可用，请稍后重试");
   return {
     id: row.id,
     content_id: row.content_id,
@@ -134,6 +139,7 @@ function projectComment(row: DiaryComment): DiaryComment {
     isOwn: row.isOwn === true,
     interaction_count: row.interaction_count ?? 0,
     has_reacted: row.has_reacted === true,
+    author_participating: row.author_participating,
   };
 }
 function remember(key: string, entry: CommentCacheEntry) {
@@ -167,6 +173,7 @@ function readCachedEntry(scope: string, id: string): CommentCacheEntry | null {
           (row.status === "pending" && row.isOwn === true)) &&
         typeof row.isOwn === "boolean" &&
         typeof row.has_reacted === "boolean" &&
+        typeof row.author_participating === "boolean" &&
         Number.isInteger(row.interaction_count) &&
         row.interaction_count! >= 0
     )
@@ -426,8 +433,7 @@ export async function removeDiaryComment(comment: DiaryComment): Promise<void> {
 export async function toggleDiaryCommentReaction(
   comment: DiaryComment
 ): Promise<DiaryCommentReaction> {
-  if (comment.isOwn || comment.status === "pending")
-    throw new Error("只能互动别人已发表的评论");
+  if (comment.status === "pending") throw new Error("只能互动已发表的评论");
   const previousScope = await getCacheScope();
   const previous = previousScope
     ? readCachedEntry(previousScope, comment.content_id)
@@ -441,7 +447,14 @@ export async function toggleDiaryCommentReaction(
   if (
     !Number.isInteger(data?.interaction_count) ||
     data.interaction_count < 0 ||
-    typeof data.is_active !== "boolean"
+    typeof data.is_active !== "boolean" ||
+    typeof data.author_participating !== "boolean" ||
+    typeof data.requires_delete_confirmation !== "boolean" ||
+    (data.requires_delete_confirmation &&
+      (!comment.isOwn ||
+        data.interaction_count !== 0 ||
+        !data.is_active ||
+        !data.author_participating))
   )
     throw new Error("互动暂时不可用，请稍后再试");
   mutationVersion++;
@@ -458,6 +471,7 @@ export async function toggleDiaryCommentReaction(
               ...row,
               interaction_count: data.interaction_count,
               has_reacted: data.is_active,
+              author_participating: data.author_participating,
             }
           : row
       ),
@@ -465,5 +479,7 @@ export async function toggleDiaryCommentReaction(
   return {
     interaction_count: data.interaction_count,
     is_active: data.is_active,
+    author_participating: data.author_participating,
+    requires_delete_confirmation: data.requires_delete_confirmation,
   };
 }

@@ -239,10 +239,12 @@ export default function DiaryComments({
       showNotice("已删除");
       return true;
     } catch (error) {
-      if (alive.current)
+      if (alive.current) {
         setActionError(
           error instanceof Error ? error.message : "评论暂时无法撤回"
         );
+        await loadInteractions(true);
+      }
       return false;
     } finally {
       if (alive.current) setRemoving(null);
@@ -251,7 +253,7 @@ export default function DiaryComments({
   async function react(
     comment: DiaryComment
   ): Promise<DiaryCommentReaction | null> {
-    if (reactionsInFlight.current.has(comment.id) || comment.isOwn) return null;
+    if (reactionsInFlight.current.has(comment.id)) return null;
     reactionsInFlight.current.add(comment.id);
     setReacting([...reactionsInFlight.current]);
     setActionError("");
@@ -265,6 +267,7 @@ export default function DiaryComments({
                   ...row,
                   interaction_count: result.interaction_count,
                   has_reacted: result.is_active,
+                  author_participating: result.author_participating,
                 }
               : row
           )

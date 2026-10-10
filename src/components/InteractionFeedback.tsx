@@ -5,10 +5,12 @@ export type InteractionPulse = { text: string; key: number };
 
 export default function InteractionFeedback({
   count,
+  countLabel = "次互动",
   pulse,
   onPulseEnd,
 }: {
   count: number;
+  countLabel?: string;
   pulse?: InteractionPulse | null;
   onPulseEnd: (key: number) => void;
 }) {
@@ -24,7 +26,7 @@ export default function InteractionFeedback({
       {count > 1 && (
         <span
           className="pointer-events-none absolute -top-1.5 -right-1.5 rounded-full border border-border bg-background px-1 font-mono text-[10px] leading-3.5 text-accent"
-          aria-label={`${count} 次互动`}
+          aria-label={`${count} ${countLabel}`}
         >
           +{count}
         </span>

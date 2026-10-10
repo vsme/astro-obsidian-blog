@@ -41,6 +41,8 @@ test("Client batches emoji and comment reads, keeps ownership private and never 
   const pending = row("00000000-0000-4000-8000-000000000003", "等待审核");
   let removed = false;
   let reacted = false;
+  let ownAuthor = true;
+  let ownOtherCount = 0;
   let holdNextList = false,
     listStarted = () => {},
     releaseList;
@@ -83,8 +85,18 @@ test("Client batches emoji and comment reads, keeps ownership private and never 
                 ].map(row => ({
                   ...row,
                   interaction_count:
-                    row.id === other.id ? (reacted ? 3 : 2) : 0,
-                  has_reacted: row.id === other.id && reacted,
+                    row.id === other.id
+                      ? reacted
+                        ? 3
+                        : 2
+                      : row.id === own.id
+                        ? ownOtherCount
+                        : 0,
+                  has_reacted:
+                    row.id === own.id
+                      ? ownAuthor
+                      : row.id === other.id && reacted,
+                  author_participating: row.id === own.id ? ownAuthor : true,
                   email: "private@example.test",
                   owner_hash: "secret",
                 })),
@@ -103,7 +115,25 @@ test("Client batches emoji and comment reads, keeps ownership private and never 
           if (body.action === "react" && body.comment_id === other.id) {
             reacted = !reacted;
             return {
-              data: { interaction_count: reacted ? 3 : 2, is_active: reacted },
+              data: {
+                interaction_count: reacted ? 3 : 2,
+                is_active: reacted,
+                author_participating: true,
+                requires_delete_confirmation: false,
+              },
+              error: null,
+            };
+          }
+          if (body.action === "react" && body.comment_id === own.id) {
+            const confirmation = ownAuthor && ownOtherCount === 0;
+            if (!confirmation) ownAuthor = !ownAuthor;
+            return {
+              data: {
+                interaction_count: ownOtherCount,
+                is_active: ownAuthor,
+                author_participating: ownAuthor,
+                requires_delete_confirmation: confirmation,
+              },
               error: null,
             };
           }
@@ -112,6 +142,16 @@ test("Client batches emoji and comment reads, keeps ownership private and never 
             body.comment_id === own.id &&
             body.owner_token === ownerToken
           ) {
+            if (!ownAuthor || ownOtherCount > 0)
+              return {
+                data: null,
+                error: {
+                  context: Response.json(
+                    { error: "评论状态已变化，无法撤回" },
+                    { status: 404 }
+                  ),
+                },
+              };
             removed = true;
             return { data: { removed: true }, error: null };
           }
@@ -176,7 +216,7 @@ test("Client batches emoji and comment reads, keeps ownership private and never 
     const storedCommentKeys = () =>
       [...store.keys()].filter(
         key =>
-          key.startsWith("astro-paper:diary-comments:v1:") &&
+          key.startsWith("astro-paper:diary-comments:v2:") &&
           !key.includes(":index:")
       );
     const persistedKey = storedCommentKeys().find(key =>
@@ -207,13 +247,47 @@ test("Client batches emoji and comment reads, keeps ownership private and never 
     store.set("astro-paper:diary-comment-owner:v1", ownerToken);
     assert.deepEqual(await reloaded.getCachedDiaryComments(contentId), rows);
     await assert.rejects(
-      () => client.toggleDiaryCommentReaction(rows.find(r => r.id === own.id)),
-      /只能互动别人/
+      () =>
+        client.toggleDiaryCommentReaction(rows.find(r => r.id === pending.id)),
+      /只能互动已发表/
     );
+    const ownRow = rows.find(r => r.id === own.id);
+    const confirmation = await client.toggleDiaryCommentReaction(ownRow);
+    assert.equal(confirmation.requires_delete_confirmation, true);
+    assert.equal(ownAuthor, true);
+    ownOtherCount = 1;
+    await client.getDiaryComments(contentId, true);
+    const withdrawal = await client.toggleDiaryCommentReaction(ownRow);
+    assert.deepEqual(withdrawal, {
+      interaction_count: 1,
+      is_active: false,
+      author_participating: false,
+      requires_delete_confirmation: false,
+    });
+    const ownerReload = await reload("owner-withdrawn");
+    assert.equal(
+      (await ownerReload.getCachedDiaryComments(contentId)).find(
+        r => r.id === own.id
+      ).author_participating,
+      false
+    );
+    await assert.rejects(() => client.removeDiaryComment(ownRow), /状态已变化/);
+    assert.equal(removed, false);
+    const restored = await client.toggleDiaryCommentReaction(ownRow);
+    assert.equal(restored.author_participating, true);
+    assert.equal(restored.interaction_count, 1);
+    const beforeOtherReactionExpiration = JSON.parse(
+      store.get(persistedKey)
+    ).expiresAt;
     const added = await client.toggleDiaryCommentReaction(
       rows.find(r => r.id === other.id)
     );
-    assert.deepEqual(added, { interaction_count: 3, is_active: true });
+    assert.deepEqual(added, {
+      interaction_count: 3,
+      is_active: true,
+      author_participating: true,
+      requires_delete_confirmation: false,
+    });
     const afterReactionReload = await reload("after-reaction");
     assert.equal(
       (await afterReactionReload.getCachedDiaryComments(contentId)).find(
@@ -223,7 +297,7 @@ test("Client batches emoji and comment reads, keeps ownership private and never 
     );
     assert.equal(
       JSON.parse(store.get(persistedKey)).expiresAt,
-      persisted.expiresAt
+      beforeOtherReactionExpiration
     );
     assert.equal(
       (await client.getDiaryComments(contentId)).find(r => r.id === other.id)
@@ -233,7 +307,12 @@ test("Client batches emoji and comment reads, keeps ownership private and never 
     const cancelled = await client.toggleDiaryCommentReaction(
       rows.find(r => r.id === other.id)
     );
-    assert.deepEqual(cancelled, { interaction_count: 2, is_active: false });
+    assert.deepEqual(cancelled, {
+      interaction_count: 2,
+      is_active: false,
+      author_participating: true,
+      requires_delete_confirmation: false,
+    });
     assert.ok(!JSON.stringify(rows).includes("private@example.test"));
     assert.ok(!JSON.stringify(rows).includes("owner_hash"));
     assert.ok(!JSON.stringify(toolbar).includes("must-not-leak"));
@@ -251,6 +330,7 @@ test("Client batches emoji and comment reads, keeps ownership private and never 
         }),
       /不属于你/
     );
+    ownOtherCount = 0;
     const readsBefore = actions.filter(body => body.action === "list").length;
     const started = new Promise(resolve => {
       listStarted = resolve;
@@ -358,7 +438,7 @@ test("Client batches emoji and comment reads, keeps ownership private and never 
     );
     assert.ok(storedCommentKeys().length <= 100);
     const indexKeys = [...store.keys()].filter(key =>
-      key.startsWith("astro-paper:diary-comments:v1:index:")
+      key.startsWith("astro-paper:diary-comments:v2:index:")
     );
     assert.ok(indexKeys.every(key => JSON.parse(store.get(key)).length <= 100));
     await client.getDiaryComments(contentId, true);

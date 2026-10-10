@@ -420,7 +420,7 @@ CREATE TABLE public.diary_comments (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     interaction_count integer DEFAULT 0 NOT NULL,
     CONSTRAINT diary_comments_check CHECK (((message <> ''::text) OR (emoji IS NOT NULL))),
-    CONSTRAINT diary_comments_content_id_check CHECK ((content_id ~ '^emoji-reactions-[0-9]{4}-[0-9]{2}-[0-9]{2}-[0-9]{2}-[0-9]{2}$'::text)),
+    CONSTRAINT diary_comments_content_id_check CHECK ((content_id ~ '^emoji-reactions-([0-9]{4}-[0-9]{2}-[0-9]{2}-[0-9]{2}-[0-9]{2}|footprint-[A-Za-z0-9][A-Za-z0-9_-]{0,179})$'::text)),
     CONSTRAINT diary_comments_emoji_check CHECK ((emoji = ANY (ARRAY['👍'::text, '👎'::text, '😄'::text, '😕'::text, '🎉'::text, '❤️'::text, '🚀'::text, '👀'::text]))),
     CONSTRAINT diary_comments_interaction_count_check CHECK ((interaction_count >= 0)),
     CONSTRAINT diary_comments_message_check CHECK ((char_length(message) <= 320)),

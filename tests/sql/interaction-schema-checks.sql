@@ -45,7 +45,7 @@ do $$ begin
 end $$;
 reset role;
 set role service_role;
-do $$ declare r jsonb; comment_id uuid; begin
+do $$ declare r jsonb; comment_id uuid; invalid_id text; begin
   r:=public.toggle_emoji_reaction_hmac('emoji-reactions-test-cleanup','❤️','viewer',repeat('f',64));
   assert (r->>'allowed')::boolean and (r->>'new_count')::integer=1;
   r:=public.toggle_emoji_reaction_hmac('emoji-reactions-test-cleanup','❤️','viewer',repeat('f',64));
@@ -61,5 +61,18 @@ do $$ declare r jsonb; comment_id uuid; begin
   assert (select interaction_count from public.toggle_diary_comment_reaction(comment_id,repeat('e',64)))=1;
   assert (select interaction_count from public.toggle_diary_comment_reaction(comment_id,repeat('e',64)))=0;
   assert public.delete_owned_diary_comment(comment_id,repeat('d',64));
+  r:=public.publish_owned_diary_comment(repeat('d',64),'emoji-reactions-footprint-2026-01-01-example','footprint fixture',null,null,null,'test','[]',repeat('d',64));
+  assert (r->>'allowed')::boolean;
+  select id into comment_id from public.diary_comments where message='footprint fixture';
+  assert (select count(*) from public.get_diary_comments_for_viewer(array['emoji-reactions-footprint-2026-01-01-example'],repeat('d',64)) where is_own)=1;
+  assert not public.delete_owned_diary_comment(comment_id,repeat('e',64));
+  assert (select interaction_count from public.toggle_diary_comment_reaction(comment_id,repeat('e',64)))=1;
+  assert public.delete_owned_diary_comment(comment_id,repeat('d',64));
+  foreach invalid_id in array array['emoji-reactions-footprint-','emoji-reactions-footprint-'||repeat('a',181),'emoji-reactions-footprint-../private'] loop
+    begin
+      insert into public.diary_comments(content_id,message,status) values(invalid_id,'invalid fixture','approved');
+      raise exception 'invalid footprint ID accepted';
+    exception when check_violation then null; end;
+  end loop;
 end $$;
 reset role;

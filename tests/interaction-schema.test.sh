@@ -44,6 +44,11 @@ do $$ declare baseline record; actual jsonb; begin
  assert (select count(*) from public.user_reactions)=1, 'emoji data lost';
 end $$;
 SQL
+for task_sql in supabase/migrations/*.sql; do
+ if [[ "$task_sql" > "supabase/migrations/20261010022122_interaction_schema_cleanup.sql" ]]; then
+  psql "${task_psql[@]}" -d upgraded -f "$task_sql" >/dev/null
+ fi
+done
 psql "${task_psql[@]}" -d upgraded -f tests/sql/interaction-schema-checks.sql >/dev/null
 psql "${task_psql[@]}" -d upgraded -f supabase/migrations/20261010022122_interaction_schema_cleanup.sql >/dev/null
 # Export the final schema without fixture data, ACL defaults, or unrelated schemas.

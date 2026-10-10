@@ -1,5 +1,10 @@
 export const COMMENT_LIMIT = 20;
 export const NICKNAME_LIMIT = 20;
+const CONTENT_ID_PATTERN =
+  /^emoji-reactions-(?:\d{4}-\d{2}-\d{2}-\d{2}-\d{2}|footprint-[A-Za-z0-9][A-Za-z0-9_-]{0,179})$/;
+export function isCommentContentId(value) {
+  return typeof value === "string" && CONTENT_ID_PATTERN.test(value);
+}
 export const COMMENT_ICONS = [
   { emoji: "👍", label: "赞" },
   { emoji: "👎", label: "不赞同" },
@@ -34,8 +39,7 @@ export function validateComment(input) {
     emoji = read("emoji"),
     nickname = read("nickname"),
     email = read("email");
-  if (!/^emoji-reactions-\d{4}-\d{2}-\d{2}-\d{2}-\d{2}$/.test(content_id))
-    throw new Error("请选择一条日志");
+  if (!isCommentContentId(content_id)) throw new Error("评论位置无效");
   if (!message && !emoji) throw new Error("写一句话，或选择一个图标");
   if (countCharacters(message) > COMMENT_LIMIT || message.length > 320)
     throw new Error("评论不能超过 20 个字");

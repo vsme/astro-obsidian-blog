@@ -1,6 +1,7 @@
 import {
   validateComment,
   COMMENT_ICONS,
+  isCommentContentId,
 } from "../../../src/utils/commentRules.mjs";
 import { APPROVAL_THRESHOLDS } from "./jev.mjs";
 export function createCommentHandler({
@@ -102,18 +103,14 @@ export function createCommentHandler({
           /[\u0000-\u001f\u007f]/.test(body.content_id) ||
           !COMMENT_ICONS.some(icon => icon.emoji === body.emoji))
       )
-        throw new Error("请选择有效的日志和表情");
+        throw new Error("请选择有效的内容和表情");
       if (
         action === "list" &&
         (!Array.isArray(body.content_ids) ||
           body.content_ids.length > 50 ||
-          !body.content_ids.every(
-            id =>
-              typeof id === "string" &&
-              /^emoji-reactions-\d{4}-\d{2}-\d{2}-\d{2}-\d{2}$/.test(id)
-          ))
+          !body.content_ids.every(isCommentContentId))
       )
-        throw new Error("请选择有效的日志");
+        throw new Error("请选择有效的内容");
       if (
         ["remove", "react"].includes(action) &&
         (typeof body.comment_id !== "string" ||

@@ -4,6 +4,7 @@ import {
   validateComment,
   countCharacters,
   normalizeNickname,
+  isCommentContentId,
 } from "../src/utils/commentRules.mjs";
 import {
   makeReviewRequest,
@@ -116,6 +117,27 @@ test("昵称长度、非法字段类型、图标、邮箱和非日志ID由服务
     { message: "hello\u202e" },
   ])
     assert.throws(() => validateComment({ ...input, ...invalid }));
+});
+test("日志与足迹使用独立内容 ID，接受足迹边界并拒绝空或越界位置", () => {
+  for (const id of [
+    input.content_id,
+    "emoji-reactions-footprint-2026-01-01-example",
+    "emoji-reactions-footprint-" + "a".repeat(180),
+  ]) {
+    assert.equal(isCommentContentId(id), true);
+    assert.equal(validateComment({ ...input, content_id: id }).content_id, id);
+  }
+  for (const id of [
+    null,
+    "emoji-reactions-footprint-",
+    "emoji-reactions-footprint-" + "a".repeat(181),
+    "emoji-reactions-footprint-../private",
+    "emoji-reactions-footprint-<script>",
+    "footprint-example",
+  ]) {
+    assert.equal(isCommentContentId(id), false);
+    assert.throws(() => validateComment({ ...input, content_id: id }));
+  }
 });
 test("去音调、空白、大小写和分隔符的昵称，不发送邮箱", () => {
   assert.equal(normalizeNickname("Xí Jìn-Píng"), "xijinping");
@@ -966,4 +988,41 @@ test("表情写入不依赖审核密钥或评论归属凭证，支持足迹，�
       400
     );
   assert.equal(calls.length, 1);
+});
+
+test("足迹评论通过同一审核与批量接口，位置不会变成日志 ID", async () => {
+  const id = "emoji-reactions-footprint-2026-01-01-example";
+  const listed = [];
+  const s = setup({
+    list: async ids => {
+      listed.push(ids);
+      return [];
+    },
+    emojiList: async () => [],
+  });
+  const submitted = await s.handler(request({ ...input, content_id: id }));
+  assert.equal(submitted.status, 201);
+  assert.equal(s.reviews, 1);
+  assert.equal(s.saved[0].c.content_id, id);
+  const combined = await s.handler(
+    request({
+      action: "list",
+      content_ids: [input.content_id, id],
+      emoji_user_hash: "browser-viewer",
+    })
+  );
+  assert.equal(combined.status, 200);
+  assert.deepEqual(await combined.json(), {
+    comments: [],
+    emoji_reactions: [],
+  });
+  assert.deepEqual(listed, [[input.content_id, id]]);
+  assert.equal(
+    (
+      await s.handler(
+        request({ action: "list", content_ids: [id + "/../private"] })
+      )
+    ).status,
+    400
+  );
 });

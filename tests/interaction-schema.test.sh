@@ -44,13 +44,15 @@ do $$ declare baseline record; actual jsonb; begin
  assert (select count(*) from public.user_reactions)=1, 'emoji data lost';
 end $$;
 SQL
+psql "${task_psql[@]}" -d upgraded -f supabase/migrations/20261010022122_interaction_schema_cleanup.sql >/dev/null
 for task_sql in supabase/migrations/*.sql; do
  if [[ "$task_sql" > "supabase/migrations/20261010022122_interaction_schema_cleanup.sql" ]]; then
   psql "${task_psql[@]}" -d upgraded -f "$task_sql" >/dev/null
  fi
 done
 psql "${task_psql[@]}" -d upgraded -f tests/sql/interaction-schema-checks.sql >/dev/null
-psql "${task_psql[@]}" -d upgraded -f supabase/migrations/20261010022122_interaction_schema_cleanup.sql >/dev/null
+psql "${task_psql[@]}" -d upgraded -f tests/sql/comment-author-participation.sql >/dev/null
+bash tests/comment-author-race.test.sh "$task_pg_root/socket" upgraded
 # Export the final schema without fixture data, ACL defaults, or unrelated schemas.
 pg_dump -h "$task_pg_root/socket" -p 55441 -U postgres -d upgraded --schema-only --no-owner --no-privileges --no-comments --schema=public --schema=diary_private > "$task_pg_root/schema.sql"
 psql "${task_psql[@]}" -d upgraded -At -c "select p.oid::regprocedure::text from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname in ('public','diary_private') and not exists(select 1 from pg_depend d where d.classid='pg_proc'::regclass and d.objid=p.oid and d.deptype='e') order by n.nspname,p.proname;" > "$task_pg_root/functions.txt"
@@ -103,6 +105,7 @@ JS
 fi
 psql "${task_psql[@]}" -d fresh -f supabase/initialize.sql >/dev/null
 psql "${task_psql[@]}" -d fresh -f tests/sql/interaction-schema-checks.sql >/dev/null
+psql "${task_psql[@]}" -d fresh -f tests/sql/comment-author-participation.sql >/dev/null
 # A full initialization must refuse an existing project before touching its data.
 if psql "${task_psql[@]}" -d upgraded -f supabase/initialize.sql > "$task_pg_root/guard.txt" 2>&1; then
  echo 'Initialization unexpectedly accepted an existing project' >&2; exit 1

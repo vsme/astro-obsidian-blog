@@ -307,6 +307,7 @@ test("只返回凭证所属评论；响应投影不含邮箱、审核或所有�
           is_own: true,
           interaction_count: 0,
           has_reacted: false,
+          author_participating: true,
           email: "private@example.test",
           owner_hash: hash,
           moderation: {},
@@ -335,6 +336,7 @@ test("只返回凭证所属评论；响应投影不含邮箱、审核或所有�
       "isOwn",
       "interaction_count",
       "has_reacted",
+      "author_participating",
     ].sort()
   );
   assert.equal(s.reviews, 0);
@@ -549,7 +551,13 @@ test("评论互动使用服务端凭证和独立限流，不调用审核；只�
     },
     react: async (id, hash) => {
       actor = { id, hash };
-      return { interaction_count: 2, is_active: true, owner_hash: hash };
+      return {
+        interaction_count: 2,
+        is_active: true,
+        author_participating: true,
+        requires_delete_confirmation: false,
+        owner_hash: hash,
+      };
     },
   });
   const id = "00000000-0000-4000-8000-000000000001";
@@ -557,7 +565,12 @@ test("评论互动使用服务端凭证和独立限流，不调用审核；只�
     request({ action: "react", comment_id: id, owner_token: "b".repeat(64) })
   );
   assert.equal(r.status, 200);
-  assert.deepEqual(await r.json(), { interaction_count: 2, is_active: true });
+  assert.deepEqual(await r.json(), {
+    interaction_count: 2,
+    is_active: true,
+    author_participating: true,
+    requires_delete_confirmation: false,
+  });
   assert.equal(reservedScope, "react");
   assert.equal(actor.id, id);
   assert.match(actor.hash, /^[a-f0-9]{64}$/);
@@ -565,7 +578,7 @@ test("评论互动使用服务端凭证和独立限流，不调用审核；只�
   assert.equal(s.reviews, 0);
   assert.equal(s.saved.length, 0);
 });
-test("服务端拒绝互动自己/未公开/不存在的评论；限流和非法结果不伪装成功", async () => {
+test("服务端拒绝互动未公开/不存在的评论；限流和非法结果不伪装成功", async () => {
   const body = {
     action: "react",
     comment_id: "00000000-0000-4000-8000-000000000001",
@@ -617,6 +630,7 @@ test("一次批量列表接口支持匿名访问和凭证归属，响应不包�
           interaction_count: 2,
           is_own: false,
           has_reacted: Boolean(hash),
+          author_participating: true,
           owner_hash: hash,
           email: "private@example.test",
         },

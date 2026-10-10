@@ -63,7 +63,14 @@ test("Edge adapter needs no extra rate secret, derives stable private hashes and
                     : name === "delete_owned_diary_comment"
                       ? true
                       : name === "toggle_diary_comment_reaction"
-                        ? [{ interaction_count: 2, is_active: true }]
+                        ? [
+                            {
+                              interaction_count: 2,
+                              is_active: true,
+                              author_participating: true,
+                              requires_delete_confirmation: false,
+                            },
+                          ]
                         : name === "toggle_emoji_reaction_hmac"
                           ? emojiAllowed
                             ? {
@@ -217,6 +224,8 @@ test("Edge adapter needs no extra rate secret, derives stable private hashes and
     assert.deepEqual(await reaction.json(), {
       interaction_count: 2,
       is_active: true,
+      author_participating: true,
+      requires_delete_confirmation: false,
     });
     assert.equal(calls[6].name, "reserve_diary_comment_action");
     assert.equal(calls[6].args.p_action, "react");

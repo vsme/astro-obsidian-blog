@@ -37,17 +37,23 @@ END;
 $$;
 
 CREATE FUNCTION public.delete_owned_diary_comment(p_comment_id uuid, p_owner_hash text) RETURNS boolean
-    LANGUAGE sql
+    LANGUAGE plpgsql
     SET search_path TO ''
     AS $_$
-  with removed as (
-    delete from public.diary_comments c
-    using diary_private.diary_comment_details d
-    where c.id = p_comment_id and d.comment_id = c.id
-      and d.owner_hash = p_owner_hash
-      and p_owner_hash ~ '^[a-f0-9]{64}$'
-    returning c.id
-  ) select exists(select 1 from removed);
+declare v_id uuid; v_owner text; v_author boolean;
+begin
+  if p_owner_hash is null or p_owner_hash !~ '^[a-f0-9]{64}$' then return false; end if;
+  select c.id into v_id from public.diary_comments c where c.id=p_comment_id for update;
+  if not found then return false; end if;
+  select d.owner_hash,d.author_participating into v_owner,v_author
+    from diary_private.diary_comment_details d where d.comment_id=p_comment_id;
+  if v_owner is distinct from p_owner_hash or not coalesce(v_author,false)
+    or exists(select 1 from diary_private.diary_comment_reactions r where r.comment_id=p_comment_id) then
+    return false;
+  end if;
+  delete from public.diary_comments where id=p_comment_id;
+  return true;
+end;
 $_$;
 
 CREATE FUNCTION public.fn_set_updated_at() RETURNS trigger
@@ -155,7 +161,7 @@ CREATE FUNCTION public.get_content_reactions_many(p_content_ids text[], p_user_h
   ORDER BY esc.content_id, esc.count DESC, esc.emoji;
 $$;
 
-CREATE FUNCTION public.get_diary_comments_for_viewer(p_content_ids text[], p_actor_hash text DEFAULT NULL::text) RETURNS TABLE(id uuid, content_id text, message text, emoji text, nickname text, created_at timestamp with time zone, status text, interaction_count integer, is_own boolean, has_reacted boolean)
+CREATE FUNCTION public.get_diary_comments_for_viewer(p_content_ids text[], p_actor_hash text DEFAULT NULL::text) RETURNS TABLE(id uuid, content_id text, message text, emoji text, nickname text, created_at timestamp with time zone, status text, interaction_count integer, is_own boolean, has_reacted boolean, author_participating boolean)
     LANGUAGE sql STABLE
     SET search_path TO ''
     AS $_$
@@ -174,7 +180,9 @@ CREATE FUNCTION public.get_diary_comments_for_viewer(p_content_ids text[], p_act
   )
   select c.id,c.content_id,c.message,c.emoji,c.nickname,c.created_at,c.status,c.interaction_count,
     coalesce(d.owner_hash=p_actor_hash,false),
-    exists(select 1 from diary_private.diary_comment_reactions r where r.comment_id=c.id and r.actor_hash=p_actor_hash)
+    case when d.owner_hash=p_actor_hash then d.author_participating
+      else exists(select 1 from diary_private.diary_comment_reactions r where r.comment_id=c.id and r.actor_hash=p_actor_hash) end,
+    coalesce(d.author_participating,true)
   from eligible e join public.diary_comments c on c.id=e.id
   left join diary_private.diary_comment_details d on d.comment_id=c.id
   where p_actor_hash is null or p_actor_hash ~ '^[a-f0-9]{64}$'
@@ -319,27 +327,39 @@ begin
 end;
 $_$;
 
-CREATE FUNCTION public.toggle_diary_comment_reaction(p_comment_id uuid, p_actor_hash text) RETURNS TABLE(interaction_count integer, is_active boolean)
+CREATE FUNCTION public.toggle_diary_comment_reaction(p_comment_id uuid, p_actor_hash text) RETURNS TABLE(interaction_count integer, is_active boolean, author_participating boolean, requires_delete_confirmation boolean)
     LANGUAGE plpgsql
     SET search_path TO ''
     AS $_$
-declare v_status text; v_owner text; v_removed integer; v_count integer; v_active boolean;
+declare v_status text; v_owner text; v_author boolean; v_removed integer; v_count integer; v_active boolean;
 begin
   if p_actor_hash is null or p_actor_hash !~ '^[a-f0-9]{64}$' then return; end if;
-  -- Serialize all actors on this comment before counting, preventing lost updates.
-  select c.status, d.owner_hash into v_status, v_owner
-    from public.diary_comments c left join diary_private.diary_comment_details d on d.comment_id=c.id
-    where c.id=p_comment_id for update of c;
-  if not found or v_status <> 'approved' or v_owner = p_actor_hash then return; end if;
-  delete from diary_private.diary_comment_reactions where comment_id=p_comment_id and actor_hash=p_actor_hash;
-  get diagnostics v_removed = row_count;
-  v_active := v_removed = 0;
-  if v_active then
-    insert into diary_private.diary_comment_reactions(comment_id, actor_hash) values(p_comment_id,p_actor_hash);
+  -- All participation and deletion changes lock this same comment first.
+  select c.status into v_status from public.diary_comments c where c.id=p_comment_id for update;
+  if not found or v_status<>'approved' then return; end if;
+  -- Read private state after acquiring the lock to avoid a stale joined snapshot.
+  select d.owner_hash,d.author_participating into v_owner,v_author
+    from diary_private.diary_comment_details d where d.comment_id=p_comment_id;
+  v_author:=coalesce(v_author,true);
+  if v_owner=p_actor_hash then
+    if v_author and not exists(select 1 from diary_private.diary_comment_reactions r where r.comment_id=p_comment_id) then
+      return query select 0,true,true,true;
+      return;
+    end if;
+    v_author:=not v_author;
+    update diary_private.diary_comment_details set author_participating=v_author where comment_id=p_comment_id;
+    v_active:=v_author;
+  else
+    delete from diary_private.diary_comment_reactions r where r.comment_id=p_comment_id and r.actor_hash=p_actor_hash;
+    get diagnostics v_removed=row_count;
+    v_active:=v_removed=0;
+    if v_active then
+      insert into diary_private.diary_comment_reactions(comment_id,actor_hash) values(p_comment_id,p_actor_hash);
+    end if;
   end if;
-  select count(*)::integer into v_count from diary_private.diary_comment_reactions where comment_id=p_comment_id;
+  select count(*)::integer into v_count from diary_private.diary_comment_reactions r where r.comment_id=p_comment_id;
   update public.diary_comments set interaction_count=v_count where id=p_comment_id;
-  return query select v_count, v_active;
+  return query select v_count,v_active,v_author,false;
 end;
 $_$;
 
@@ -393,6 +413,7 @@ CREATE TABLE diary_private.diary_comment_details (
     moderation_model text NOT NULL,
     moderation jsonb NOT NULL,
     owner_hash text,
+    author_participating boolean DEFAULT true NOT NULL,
     CONSTRAINT diary_comment_details_email_check CHECK ((char_length(email) <= 254)),
     CONSTRAINT diary_comment_details_owner_hash_check CHECK ((owner_hash ~ '^[a-f0-9]{64}$'::text))
 );

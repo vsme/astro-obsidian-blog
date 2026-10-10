@@ -67,6 +67,8 @@ do $$ declare r jsonb; comment_id uuid; invalid_id text; begin
   assert (select count(*) from public.get_diary_comments_for_viewer(array['emoji-reactions-footprint-2026-01-01-example'],repeat('d',64)) where is_own)=1;
   assert not public.delete_owned_diary_comment(comment_id,repeat('e',64));
   assert (select interaction_count from public.toggle_diary_comment_reaction(comment_id,repeat('e',64)))=1;
+  assert not public.delete_owned_diary_comment(comment_id,repeat('d',64));
+  assert (select interaction_count from public.toggle_diary_comment_reaction(comment_id,repeat('e',64)))=0;
   assert public.delete_owned_diary_comment(comment_id,repeat('d',64));
   foreach invalid_id in array array['emoji-reactions-footprint-','emoji-reactions-footprint-'||repeat('a',181),'emoji-reactions-footprint-../private'] loop
     begin

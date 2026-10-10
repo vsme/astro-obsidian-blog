@@ -240,6 +240,7 @@ export function createCommentHandler({
             interaction_count: row.interaction_count,
             isOwn: row.is_own === true,
             has_reacted: row.has_reacted === true,
+            author_participating: row.author_participating,
           }));
         else response.comment_error = "评论暂时无法加载";
         if (includeEmojis) {
@@ -262,19 +263,27 @@ export function createCommentHandler({
         if (
           !Number.isInteger(result.interaction_count) ||
           result.interaction_count < 0 ||
-          typeof result.is_active !== "boolean"
+          typeof result.is_active !== "boolean" ||
+          typeof result.author_participating !== "boolean" ||
+          typeof result.requires_delete_confirmation !== "boolean" ||
+          (result.requires_delete_confirmation &&
+            (result.interaction_count !== 0 ||
+              !result.is_active ||
+              !result.author_participating))
         )
           throw new Error("Invalid reaction result");
         return json(200, {
           interaction_count: result.interaction_count,
           is_active: result.is_active,
+          author_participating: result.author_participating,
+          requires_delete_confirmation: result.requires_delete_confirmation,
         });
       }
       if (action === "remove") {
         const removed = await remove(body.comment_id, ownerHash);
         return removed
           ? json(200, { removed: true })
-          : json(404, { error: "评论不存在或不属于你，无法撤回" });
+          : json(404, { error: "评论不存在、状态已变化或不属于你，无法撤回" });
       }
       const limited = rateResponse(await reserve(request, "submit"), "submit");
       if (limited) return limited;

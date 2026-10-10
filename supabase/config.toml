@@ -1,0 +1,5 @@
+project_id = "astro-paper"
+
+# Anonymous visitors: the handler checks apikey, origin and server rate budgets.
+[functions.diary-comment]
+verify_jwt = false

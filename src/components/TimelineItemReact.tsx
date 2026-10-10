@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import MediaCard from "./MediaCard";
-import EmojiReactions from "./EmojiReactions";
+import DiaryComments from "./DiaryComments";
 import type { MediaCardItem } from "./DiaryEntryReact";
 import { SUPABASE_URL, SUPABASE_KEY } from "astro:env/client";
 
@@ -154,16 +154,17 @@ const TimelineItemReact: React.FC<TimelineItemProps> = ({
                   aria-label={`图片集合，共 ${optimizedImages.length} 张图片`}
                 >
                   <div
-                    className={`grid gap-3 ${htmlContent
-                      ? "w-full grid-cols-1"
-                      : optimizedImages.length === 1
-                        ? "max-w-80 grid-cols-1"
-                        : optimizedImages.length === 2
-                          ? "max-w-83 grid-cols-2"
-                          : optimizedImages.length === 4
+                    className={`grid gap-3 ${
+                      htmlContent
+                        ? "w-full grid-cols-1"
+                        : optimizedImages.length === 1
+                          ? "max-w-80 grid-cols-1"
+                          : optimizedImages.length === 2
                             ? "max-w-83 grid-cols-2"
-                            : "max-w-126 grid-cols-3"
-                      }`}
+                            : optimizedImages.length === 4
+                              ? "max-w-83 grid-cols-2"
+                              : "max-w-126 grid-cols-3"
+                    }`}
                   >
                     {optimizedImages.map((optimizedImg, index) => {
                       const originalImg = images![index];
@@ -171,17 +172,18 @@ const TimelineItemReact: React.FC<TimelineItemProps> = ({
                       return (
                         <a
                           key={index}
-                          className={`lg-item group focus:ring-skin-accent block overflow-hidden rounded-xl focus:outline-none ${optimizedImages.length === 1
-                            ? "relative"
-                            : "image-item relative aspect-square"
-                            }`}
+                          className={`lg-item group focus:ring-skin-accent block overflow-hidden rounded-xl focus:outline-none ${
+                            optimizedImages.length === 1
+                              ? "relative"
+                              : "image-item relative aspect-square"
+                          }`}
                           style={
                             optimizedImages.length === 1
                               ? {}
                               : ({
-                                aspectRatio: "1 / 1",
-                                WebkitAspectRatio: "1 / 1",
-                              } as React.CSSProperties)
+                                  aspectRatio: "1 / 1",
+                                  WebkitAspectRatio: "1 / 1",
+                                } as React.CSSProperties)
                           }
                           data-src={optimizedImg.original}
                           data-lg-size={`${optimizedImg.width}-${optimizedImg.height}`}
@@ -205,10 +207,10 @@ const TimelineItemReact: React.FC<TimelineItemProps> = ({
                               optimizedImages.length === 1
                                 ? {}
                                 : {
-                                  width: "100%",
-                                  height: "100%",
-                                  objectFit: "cover",
-                                }
+                                    width: "100%",
+                                    height: "100%",
+                                    objectFit: "cover",
+                                  }
                             }
                             loading="lazy"
                             title={originalImg.title}
@@ -250,8 +252,8 @@ const TimelineItemReact: React.FC<TimelineItemProps> = ({
 
               {/* 表情组件 */}
               {SUPABASE_URL && SUPABASE_KEY && (
-                <EmojiReactions
-                  id={`emoji-reactions-${date}-${time.replace(":", "-")}`}
+                <DiaryComments
+                  contentId={`emoji-reactions-${date}-${time.replace(":", "-")}`}
                 />
               )}
             </div>

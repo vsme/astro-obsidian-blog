@@ -1,0 +1,46 @@
+@keyframes diary-comment-reaction-pop {
+  0% {
+    opacity: 0;
+    transform: translateY(0) scale(0.85);
+  }
+  20% {
+    opacity: 1;
+    transform: translateY(-3px) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-20px) scale(1);
+  }
+}
+.diary-comment-reaction-pop {
+  animation: diary-comment-reaction-pop 750ms ease-out both;
+}
+@keyframes diary-comment-enter {
+  from {
+    width: 0;
+    opacity: 0;
+    transform: translateX(-4px);
+  }
+  to {
+    width: var(--diary-comment-width);
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+.diary-comment-enter {
+  overflow: hidden;
+  animation: diary-comment-enter 460ms ease-out both;
+}
+.diary-comment-enter > button {
+  width: var(--diary-comment-width);
+  max-width: none;
+  flex-shrink: 0;
+}
+@media (prefers-reduced-motion: reduce) {
+  .diary-comment-reaction-pop {
+    animation: none;
+  }
+  .diary-comment-enter {
+    animation: none;
+  }
+}

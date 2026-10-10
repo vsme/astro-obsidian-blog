@@ -1,5 +1,10 @@
 import { createClient } from "@supabase/supabase-js";
 import { SUPABASE_URL, SUPABASE_KEY } from "astro:env/client";
+import {
+  readStoredJson,
+  writeStoredJson,
+  removeStoredValue,
+} from "../utils/browserStorage.mjs";
 
 const supabaseUrl = SUPABASE_URL;
 const supabaseKey = SUPABASE_KEY;
@@ -12,17 +17,6 @@ export const supabase = !!(supabaseUrl && supabaseKey)
 // 用于在未配置时提供友好的日志信息
 if (!supabase) {
   console.info("Supabase not configured - emoji reactions will be disabled");
-}
-
-// 类型
-export interface UserReactionData {
-  id?: string;
-  content_id: string;
-  emoji: string;
-  user_hash: string;
-  is_active: boolean;
-  created_at?: string;
-  updated_at?: string;
 }
 
 export type ReactionRow = {
@@ -70,25 +64,22 @@ export function getCachedContentReactions(
   }
   reactionsMemoryCache.delete(cacheKey);
 
-  try {
-    const storageKey = getReactionStorageKey(contentId, userHash);
-    const stored = localStorage.getItem(storageKey);
-    if (!stored) return null;
-
-    const entry = JSON.parse(stored) as ReactionCacheEntry;
-    if (!Array.isArray(entry.rows) || entry.expiresAt <= now) {
-      localStorage.removeItem(storageKey);
-      return null;
-    }
-
-    reactionsMemoryCache.set(cacheKey, entry);
-    return entry.rows;
-  } catch {
+  const storageKey = getReactionStorageKey(contentId, userHash);
+  const entry = readStoredJson<ReactionCacheEntry>(storageKey);
+  if (!entry) return null;
+  if (
+    !Array.isArray(entry.rows) ||
+    !Number.isFinite(entry.expiresAt) ||
+    entry.expiresAt <= now
+  ) {
+    removeStoredValue(storageKey);
     return null;
   }
+  reactionsMemoryCache.set(cacheKey, entry);
+  return entry.rows;
 }
 
-function setCachedContentReactions(
+export function setCachedContentReactions(
   contentId: string,
   userHash: string | undefined,
   rows: ReactionRow[]
@@ -101,14 +92,7 @@ function setCachedContentReactions(
   };
   reactionsMemoryCache.set(getReactionCacheKey(contentId, userHash), entry);
 
-  try {
-    localStorage.setItem(
-      getReactionStorageKey(contentId, userHash),
-      JSON.stringify(entry)
-    );
-  } catch {
-    // localStorage 不可用或空间不足时，继续使用内存缓存。
-  }
+  writeStoredJson(getReactionStorageKey(contentId, userHash), entry);
 }
 
 function updateCachedContentReaction(
@@ -161,12 +145,9 @@ function groupByContentId(rows: ReactionRow[]) {
 
 /**
  * 直接单条读取（不经过批量器）
- * 若你想强制一次只打一个 RPC，可调用这个函数。
+ * 仅供 SSR 读取，不与浏览器的跨组件批量队列共享。
  */
-export async function getContentReactionsDirect(
-  contentId: string,
-  userHash?: string
-) {
+async function getContentReactionsDirect(contentId: string, userHash?: string) {
   const cached = getCachedContentReactions(contentId, userHash);
   if (cached) return cached;
 
@@ -185,28 +166,6 @@ export async function getContentReactionsDirect(
   const rows = (data as ReactionRow[]) ?? [];
   setCachedContentReactions(contentId, userHash, rows);
   return rows;
-}
-
-/**
- * 批量读取：一次拿多个 contentId 的汇总
- */
-export async function getContentReactionsMany(
-  contentIds: string[],
-  userHash?: string
-) {
-  if (!checkSupabaseAvailable()) {
-    return [] as ReactionRow[];
-  }
-
-  const { data, error } = await supabase!.rpc("get_content_reactions_many", {
-    p_content_ids: contentIds,
-    p_user_hash: userHash ?? null,
-  });
-  if (error) {
-    console.error("Error fetching reactions (batch):", error);
-    return [] as ReactionRow[];
-  }
-  return (data as ReactionRow[]) ?? [];
 }
 
 // 客户端批量器（同一帧内的多个请求合并为一次 RPC）
@@ -316,38 +275,65 @@ export function getContentReactions(contentId: string, userHash?: string) {
   return reactionsBatcher.load(contentId, userHash);
 }
 
-// 写入：切换表情（服务器端限流）
+type EmojiToggleResult = {
+  emoji: string;
+  new_count: number;
+  is_active: boolean;
+};
+const pendingEmojiWrites = new Map<string, Promise<EmojiToggleResult | null>>();
+
+// Same-browser duplicate clicks share one toggle, rather than toggling twice.
 export async function toggleEmojiReaction(
   contentId: string,
   emoji: string,
   userHash: string
 ) {
-  if (!checkSupabaseAvailable()) {
-    console.warn("Supabase not configured - emoji reaction toggle skipped");
-    return null;
+  if (!checkSupabaseAvailable()) return null;
+  const key = JSON.stringify([userHash, contentId, emoji]);
+  const pending = pendingEmojiWrites.get(key);
+  if (pending) return pending;
+  const request = (async () => {
+    const { data, error } = await supabase!.functions.invoke("diary-comment", {
+      body: {
+        action: "emoji",
+        content_id: contentId,
+        emoji,
+        emoji_user_hash: userHash,
+      },
+    });
+    if (error) {
+      let message = "表情暂时无法操作，请稍后重试";
+      try {
+        const response = await error.context?.json();
+        if (typeof response?.error === "string") message = response.error;
+      } catch {
+        /* Keep the public fallback. */
+      }
+      throw new Error(message);
+    }
+    const row = data;
+    if (!row) return null;
+    const result: EmojiToggleResult = {
+      emoji: row.emoji,
+      new_count: row.new_count,
+      is_active: row.is_active,
+    };
+    if (
+      result.emoji !== emoji ||
+      !Number.isInteger(result.new_count) ||
+      result.new_count < 0 ||
+      typeof result.is_active !== "boolean"
+    )
+      throw new Error("Invalid emoji reaction result");
+    updateCachedContentReaction(contentId, userHash, result);
+    return result;
+  })();
+  pendingEmojiWrites.set(key, request);
+  try {
+    return await request;
+  } finally {
+    if (pendingEmojiWrites.get(key) === request) pendingEmojiWrites.delete(key);
   }
-
-  const { data, error } = await supabase!.rpc("toggle_emoji_reaction", {
-    p_content_id: contentId,
-    p_emoji: emoji,
-    p_user_hash: userHash,
-  });
-
-  if (error) {
-    // 可根据 errcode 做更友好的提示（例如 22023 = rate limit）
-    console.error("Error toggling reaction:", error);
-    throw error;
-  }
-
-  // 返回单行：{ emoji, new_count, is_active }
-  const result =
-    (data?.[0] as {
-      emoji: string;
-      new_count: number;
-      is_active: boolean;
-    }) ?? null;
-  if (result) updateCachedContentReaction(contentId, userHash, result);
-  return result;
 }
 
 // 生成用户哈希（基于强随机 + localStorage 持久化）

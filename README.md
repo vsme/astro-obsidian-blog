@@ -105,7 +105,18 @@ pnpm preview
 - 主题设置
 - 分页设置
 - 功能开关
+- ICP 备案号（`SITE.icpNumber`，可选）
 - 表情功能配置参考 [EMOJI_REACTIONS_SETUP](./EMOJI_REACTIONS_SETUP.md)
+
+### ICP 备案信息
+
+如需展示 ICP 备案信息，在 `src/config.ts` 的 `SITE` 中填写实际备案号：
+
+```ts
+icpNumber: "京ICP备12345678号-1", // 示例，请替换为实际备案号
+```
+
+填写后，所有使用公共页脚的页面都会在底部展示备案号。
 
 ## 📝 添加内容
 

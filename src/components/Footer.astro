@@ -1,8 +1,11 @@
 ---
 import Hr from "./Hr.astro";
 import Socials from "./Socials.astro";
+import { SITE } from "@/config";
 
 const currentYear = new Date().getFullYear();
+const icpNumber = SITE.icpNumber.trim();
+const author = SITE.author.trim();
 
 export interface Props {
   noMarginTop?: boolean;
@@ -21,9 +24,26 @@ const { noMarginTop = false } = Astro.props;
       <Socials centered />
     </div>
     <div class="my-2 flex flex-col items-center whitespace-nowrap sm:flex-row">
-      <span>Copyright &#169; {currentYear}</span>
-      <span class="hidden sm:inline">&nbsp;|&nbsp;</span>
-      <span>Yawei Sun</span>
+      <span>&#169; {currentYear}</span>
+      {
+        author && (
+          <span class="mx-1 hidden sm:inline">|</span>
+          <span class="mx-1">{author}</span>
+        )
+      }
+      {
+        icpNumber && (
+          <span class="mx-1 hidden sm:inline">|</span>
+          <a
+            href="https://beian.miit.gov.cn/"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="break-words hover:text-accent hover:underline"
+          >
+            {icpNumber}
+          </a>
+        )
+      }
     </div>
   </div>
 </footer>

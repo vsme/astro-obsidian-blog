@@ -4,10 +4,11 @@ export const FOOTPRINTS_PATH = "src/data/footprints";
 
 export const SITE = {
   website: "https://bgo.me/", // replace this with your deployed domain
-  author: "Yawei Sun",
+  author: "Yawei",
   profile: "https://bgo.me/",
   desc: "一个时间长河中的个人档案馆。",
   title: "Bingo!",
+  icpNumber: "苏ICP备14028140号-4", // 填写实际 ICP 备案号，留空则不显示；如：京ICP备12345678号-1
   ogImage: "og.jpg",
   lightAndDarkMode: true,
   postPerIndex: 5,
